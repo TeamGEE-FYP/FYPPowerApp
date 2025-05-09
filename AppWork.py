@@ -4642,11 +4642,11 @@ elif selection == "Projected future operations - Under Current OPF":
                             try:
                                 pp.runpp(net)
                             except:
-                                business_as_usual_cost[hour] = 0
-                                served_load_per_hour.append([None] * len(net.load))
-                                gen_per_hour_bau.append([None] * len(net.res_gen))
-                                slack_per_hour_bau.append(None)
-                                loading_percent_bau.append([None] * (len(net.line) + (len(net.trafo) if df_trafo is not None else 0)))
+                                # business_as_usual_cost[hour] = 0
+                                # served_load_per_hour.append([None] * len(net.load))
+                                # gen_per_hour_bau.append([None] * len(net.res_gen))
+                                # slack_per_hour_bau.append(None)
+                                # loading_percent_bau.append([None] * (len(net.line) + (len(net.trafo) if df_trafo is not None else 0)))
                                 continue
                             
                             # Record loadings
@@ -4687,15 +4687,17 @@ elif selection == "Projected future operations - Under Current OPF":
                                         try:
                                             try:
                                                 pp.runopp(net)
-                                                if net.OPF_converged:
-                                                    business_as_usual_cost[hour] = net.res_cost
+                                                business_as_usuall_cost[hour] = net.res_cost if net.OPF_converged else business_as_usuall_cost[hour]
+                                                # if net.OPF_converged:
+                                                #     business_as_usual_cost[hour] = net.res_cost
                                             except:
                                                 pp.runpp(net)
+                                                pass
                                         except:
-                                            business_as_usual_cost[hour] = 0
-                                            overloads.clear()
-                                            if df_trafo is not None:
-                                                overloads_trafo.clear()
+                                            # business_as_usual_cost[hour] = 0
+                                            # overloads.clear()
+                                            # if df_trafo is not None:
+                                            #     overloads_trafo.clear()
                                             break
                                         if dp < 0.01:
                                             all_loads_zero_flag = True
@@ -4710,9 +4712,12 @@ elif selection == "Projected future operations - Under Current OPF":
                                                 net.load.at[i, 'q_mvar'] = 0
                                             break
                                     if not overloads and not overloads_trafo:
-                                        break
-                                overloads = overloaded_lines(net, max_loading_capacity)
-                                overloads_trafo = overloaded_transformer(net, max_loading_capacity_transformer)
+                                            if net.OPF_converged:
+                                                    business_as_usuall_cost[hour] = net.res_cost
+                                            break
+                                
+                                # overloads = overloaded_lines(net, max_loading_capacity)
+                                # overloads_trafo = overloaded_transformer(net, max_loading_capacity_transformer)
                             
                             # Record final state
                             served_load_per_hour.append(net.load["p_mw"].tolist() if not net.load["p_mw"].isnull().any() else [None] * len(net.load))
