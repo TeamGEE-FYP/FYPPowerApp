@@ -2593,9 +2593,33 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
             )
         # ─────────────────────────────────────────────────────────────────────────
 
+        # with st.spinner("Running weather-aware OPF …"):
+        #     # day_end_df, hourly_cost_df = weather_opf(line_outages)
+        #     (*_, day_end_df, hourly_cost_df) = weather_opf(line_outages)
+
         with st.spinner("Running weather-aware OPF …"):
-            # day_end_df, hourly_cost_df = weather_opf(line_outages)
-            (*_, day_end_df, hourly_cost_df) = weather_opf(line_outages)
+            (
+                loading_records,           # 0
+                shedding_buses,            # 1
+                _cum_load_shed,            # 2  ← underscores for things you don’t use
+                _hourly_shed_wa,           # 3
+                _wa_cost,                  # 4
+                _seen_buses,               # 5
+                _hourly_shed_dup,          # 6
+                _served_load_wa,           # 7
+                _loading_percent_wa,       # 8
+                _gen_per_hour_wa,          # 9
+                _slack_per_hour_wa,        # 10
+                _planned_slack_per_hour,   # 11
+                line_idx_map,              # 12
+                trafo_idx_map,             # 13
+                df_trafo,                  # 14
+                df_lines,                  # 15
+                _df_load_params,           # 16
+                day_end_df,                # 17
+                hourly_cost_df,            # 18
+            ) = weather_opf(line_outages)
+
 
         st.session_state.wa_ready          = True
         st.session_state.wa_day_end_df     = day_end_df
