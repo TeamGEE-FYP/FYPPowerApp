@@ -1534,25 +1534,8 @@ elif selection == "Projected Operation - Under Current OPF":
     cap_flag = (mode == "Capped Contingency Mode")
     
     if st.button("Run Analysis"):
-    
-        # build the outage list first
-        line_outages = generate_line_outages(
-            outage_hours   = st.session_state["outage_hours"],
-            line_down      = st.session_state["line_down"],
-            risk_scores    = st.session_state["risk_scores"],
-            capped_contingency_mode = cap_flag
-        )
-    
-        # store globally for helper functions
-        globals()["line_outages"] = line_outages
-    
-        with st.spinner("Running OPF …"):
-            (_lp_bau, _served, _gen, _slack, _rec, _cost,
-             _shed, _seen, _shed_buses, _df_lines, _df_trafo,
-             _load_df, _line_idx_map, _trafo_idx_map, _gdf,
-             day_end_df, hourly_cost_df) = current_opf(line_outages)
 
-        # ---------------------------------------------------------------------------
+         # ---------------------------------------------------------------------------
         # Aliases so the Colab names still resolve
         # ---------------------------------------------------------------------------
         def Network_initialize():
@@ -1828,6 +1811,24 @@ elif selection == "Projected Operation - Under Current OPF":
                     hourly_shed_bau, seen_buses, shedding_buses, df_lines, df_trafo,
                     load_df, line_idx_map, trafo_idx_map, gdf,
                     day_end_df, hourly_cost_df)
+
+    
+        # build the outage list first
+        line_outages = generate_line_outages(
+            outage_hours   = st.session_state["outage_hours"],
+            line_down      = st.session_state["line_down"],
+            risk_scores    = st.session_state["risk_scores"],
+            capped_contingency_mode = cap_flag
+        )
+    
+        # store globally for helper functions
+        globals()["line_outages"] = line_outages
+    
+        with st.spinner("Running OPF …"):
+            (_lp_bau, _served, _gen, _slack, _rec, _cost,
+             _shed, _seen, _shed_buses, _df_lines, _df_trafo,
+             _load_df, _line_idx_map, _trafo_idx_map, _gdf,
+             day_end_df, hourly_cost_df) = current_opf(line_outages)
 
     
         st.subheader("Day-End Summary")
