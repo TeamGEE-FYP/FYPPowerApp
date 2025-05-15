@@ -1941,13 +1941,14 @@ elif selection == "Projected Operation - Under Current OPF":
         st.subheader("Hourly Generation Cost")
         st.dataframe(st.session_state.bau_hourly_cost_df, use_container_width=True)
 
-        # 3-B · Hour picker (updates st.session_state.bau_hour automatically)
-        num_hours   = len(st.session_state.network_data['df_load_profile'])
+        # 3-B · Hour picker  – value is *index*, label is pretty text
+        num_hours = len(st.session_state.network_data['df_load_profile'])
+        
         st.selectbox(
             "Select Hour to Visualize",
-            [f"Hour {i}" for i in range(num_hours)],
-            index=st.session_state.bau_hour,
-            key="bau_hour",
+            options=list(range(num_hours)),           # the real values (ints)
+            format_func=lambda i: f"Hour {i}",        # what the user sees
+            key="bau_hour",                           # persists as int
             help="Choose any hour; the map refreshes automatically.",
         )
 
