@@ -1944,11 +1944,19 @@ elif selection == "Projected Operation - Under Current OPF":
         # 3-B · Hour picker  – value is *index*, label is pretty text
         num_hours = len(st.session_state.network_data['df_load_profile'])
         
+        # --- make sure the value is an int (first run after page reload) ------------
+        if isinstance(st.session_state.bau_hour, str):
+            try:
+                st.session_state.bau_hour = int(st.session_state.bau_hour.split()[-1])
+            except Exception:
+                st.session_state.bau_hour = 0
+        # ----------------------------------------------------------------------------
+        
         st.selectbox(
             "Select Hour to Visualize",
-            options=list(range(num_hours)),           # the real values (ints)
-            format_func=lambda i: f"Hour {i}",        # what the user sees
-            key="bau_hour",                           # persists as int
+            options=list(range(num_hours)),          # real values (ints)
+            format_func=lambda i: f"Hour {i}",       # pretty label
+            key="bau_hour",                          # stored as int
             help="Choose any hour; the map refreshes automatically.",
         )
 
