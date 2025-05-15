@@ -2329,7 +2329,7 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
                         continue
                     is_trafo = check_bus_pair(path, (fbus, tbus))
                     if is_trafo == True:
-                        mask = (((net.trafo.hv_bus == fbus) & (net.trafo.lv_bus == tbus)) |
+                        mask_tf = (((net.trafo.hv_bus == fbus) & (net.trafo.lv_bus == tbus)) |
                                 ((net.trafo.hv_bus == tbus) & (net.trafo.lv_bus == fbus)))
                         if not mask_tf.any():
                             pass
