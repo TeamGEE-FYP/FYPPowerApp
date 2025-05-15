@@ -2230,6 +2230,10 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
             # -----------------------------------------
             path = st.session_state.get("uploaded_file")      # BytesIO object
             xls  = pd.ExcelFile(path)                         # gives .sheet_names
+            # —— helper so existing single-arg calls still work ——
+            def overloaded_transformer_local(net_):
+                return overloaded_transformer(net_, path, line_outages)
+
             df_trafo = []
             if "Transformer Parameters" in xls.sheet_names:
                 (net, df_bus, df_slack, df_line, num_hours,
@@ -2378,7 +2382,7 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
                 overloads        = overloaded_lines(net)
                 overloads_trafo  = []
                 if "Transformer Parameters" in pd.ExcelFile(path).sheet_names:
-                    overloads_trafo = overloaded_transformer(net)
+                    overloads_trafo = overloaded_transformer_local(net)
                 all_loads_zero_flag = False
         
                 # 3.5 Check for overloads
@@ -2426,7 +2430,7 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
         
                 try:
                     pp.runopp(net)
-                    if (overloaded_lines(net) == []) and (overloaded_transformer(net) == []):
+                    if (overloaded_lines(net) == []) and (overloaded_transformer_local(net) == []):
                         weather_aware_cost[hour] = net.res_cost
                         all_loads_zero_flag = True
                 except Exception:
@@ -2439,14 +2443,14 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
                         )
                     )
                     and (overloaded_lines(net) == [])
-                    and (overloaded_transformer(net) == [])
+                    and (overloaded_transformer_local(net) == [])
                 ):
                     weather_aware_cost[hour] = net.res_cost
                 else:
                     # 3.7 Run OPF to relieve overloads (fallback to shedding)
                     while (
                         ((overloaded_lines(net) != [])
-                        or (overloaded_transformer(net) != [])
+                        or (overloaded_transformer_local(net) != [])
                     ) and (all_loads_zero_flag == False)):
         
                         for crit in sorted(
@@ -2454,7 +2458,7 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
                         ):
                             for ld_idx in net.load[net.load["criticality"] == crit].index:
                                 if (overloaded_lines(net) == []) and (
-                                    overloaded_transformer(net) == []
+                                    overloaded_transformer_local(net) == []
                                 ):
                                     break
         
