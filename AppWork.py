@@ -654,49 +654,64 @@ path = st.session_state.get("uploaded_file")   # BytesIO object
 #             combined = combined[:capped_limit]
 
 #     return [(f, t, hr) for f, t, hr, _ in combined]
+import math
+import pandas as pd
+
+# ──────────────────────────────────────────────────────────────────────
+# Path to the Excel file is already global in your app →  “path”
+# ──────────────────────────────────────────────────────────────────────
 
 def generate_line_outages(outage_hours, line_down, risk_scores,
                           capped_contingency_mode=False):
     """
-    Build a list of (from_bus, to_bus, outage_hour) tuples.
-    In capped-contingency mode keep only the “worst” 20 %:
-        1) higher risk-score first,
-        2) for equal scores: earlier outage-hour first.
+    Returns a list of (from_bus, to_bus, outage_hour) tuples.
+
+    When *capped_contingency_mode* is True keep only the worst 20 % lines
+    in the sense of
+        1) higher risk-score first, then
+        2) earlier outage-hour first.
     """
 
-    if not outage_hours or not line_down or not risk_scores:
+    # nothing to do
+    if not (outage_hours and line_down and risk_scores):
         return []
 
-    # ── 1  clean & align the risk-score list ──────────────────────────────
+    # ── 1 · normalise / align the risk-score list ──────────────────────
     needed  = len(line_down)
+    numeric = []
 
-    # keep only the numeric entries (positions 0,2,4,…) and take the first
-    # *needed* of them – identical to Colab behaviour
-    cleaned = [r for r in risk_scores if isinstance(r, (int, float))][:needed]
+    for r in risk_scores:
+        # risk can arrive either as a plain number or a tiny dict
+        if isinstance(r, dict):
+            r = r.get("risk_score", 0)
 
-    # if, for any reason, we are still short, pad with zeros
-    cleaned += [0] * (needed - len(cleaned))
-    # ---------------------------------------------------------------------
+        if isinstance(r, (int, float)):
+            numeric.append(r)
 
-    # ── 2  build (from_bus, to_bus, hour, score) tuples ───────────────────
+        if len(numeric) == needed:                 # we have enough
+            break
+
+    # pad with zeros if Page-2 returned fewer scores than lines
+    numeric += [0] * (needed - len(numeric))
+
+    # ── 2 · build the working list (fbus, tbus, hour, score) ───────────
     combined = [
         (line[0], line[1], hour, score)
-        for line, hour, score in zip(line_down, outage_hours, cleaned)
+        for line, hour, score in zip(line_down, outage_hours, numeric)
     ]
 
-    # ── 3  sort & apply the contingency cap ───────────────────────────────
-    #   primary  : risk-score  (descending, i.e. −score)
-    #   secondary: outage-hour (ascending)
-    combined.sort(key=lambda x: (-x[3], x[2]))
+    # ── 3 · sort by our 2-key rule  (-score → descending) ──────────────
+    combined.sort(key=lambda x: (-x[3], x[2]))     # (score desc, hour asc)
 
+    # ── 4 · apply the 20 % cap if requested ────────────────────────────
     if capped_contingency_mode:
-        sheet_name   = "Line Parameters"
-        n_lines      = len(pd.read_excel(path, sheet_name=sheet_name)) - 1
-        capped_limit = math.floor(0.2 * n_lines)
+        n_lines      = len(pd.read_excel(path, sheet_name="Line Parameters")) - 1
+        capped_limit = math.floor(0.20 * n_lines)
         combined     = combined[:capped_limit]
 
-    # return only (from_bus, to_bus, outage_hour)
+    # ── 5 · return what the rest of the code expects ───────────────────
     return [(f, t, hr) for f, t, hr, _ in combined]
+
 
 
 
