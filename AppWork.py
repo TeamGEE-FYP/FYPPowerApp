@@ -617,6 +617,7 @@ if selection == "Network Initialization":
 # Page 2: Weather Risk Visualisation Using GEE
 elif selection == "Weather Risk Visualisation Using Google Earth Engine":
     st.title("Weather Risk Visualisation Using GEE")
+    
     # Hardcoded output of page 2
     line_outages = [(3, 4, 15), (7, 1, 12)]
 
@@ -626,7 +627,26 @@ elif selection == "Weather Risk Visualisation Using Google Earth Engine":
         "hours": [15, 12],
         "risk_scores": [14, 16]  # Adjust these values based on your testing needs
     }
-
+    
+    # Display hardcoded data for verification
+    st.write("**Using hardcoded data for testing purposes**")
+    
+    # Display line_outages as a table
+    st.write("Hardcoded Line Outages:")
+    df_outages = pd.DataFrame(line_outages, columns=["From Bus", "To Bus", "Outage Hour"])
+    st.dataframe(df_outages)
+    
+    # Display session state line_outage_data as a combined table
+    st.write("Hardcoded Line Outage Data for Page 3:")
+    data = {
+        "From Bus": [line[0] for line in st.session_state.line_outage_data["lines"]],
+        "To Bus": [line[1] for line in st.session_state.line_outage_data["lines"]],
+        "Outage Hour": st.session_state.line_outage_data["hours"],
+        "Risk Score": st.session_state.line_outage_data["risk_scores"]
+    }
+    df_display = pd.DataFrame(data)
+    st.dataframe(df_display)
+    
     # # Create columns for dropdown menus
     # col1, col2, col3 = st.columns(3)
 
