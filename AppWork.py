@@ -1889,6 +1889,7 @@ elif selection == "Projected Operation - Under Current OPF":
             risk_scores    = st.session_state["risk_scores"],
             capped_contingency_mode = cap_flag
         )
+        st.session_state.line_outages = line_outages 
     
         # store globally for helper functions
         globals()["line_outages"] = line_outages
@@ -1902,17 +1903,19 @@ elif selection == "Projected Operation - Under Current OPF":
         # -----------------------------------------------------------------
         # CACHE RESULTS so they persist across page switches
         # -----------------------------------------------------------------
-        st.session_state.bau_ready                  = True
-        st.session_state.bau_day_end_df             = day_end_df
-        st.session_state.bau_hourly_cost_df         = hourly_cost_df
-        st.session_state.bau_results                = {
-            "loading_percent_bau": _lp_bau,
-            "shedding_buses":      _shed_buses
-        }
-        st.session_state.line_outages               = line_outages
-        st.session_state.line_idx_map               = _line_idx_map
-        st.session_state.trafo_idx_map              = _trafo_idx_map
-        st.session_state.max_loading_capacity       = _df_lines["max_loading_percent"].max()
+        # 2-C · WRITE ALL RESULTS TO SESSION STATE  ←── only here!
+        st.session_state.update({
+            "bau_ready":                        True,
+            "bau_day_end_df":                   day_end_df,
+            "bau_hourly_cost_df":               hourly_cost_df,
+            "bau_results": {
+                "loading_percent_bau": _lp_bau,
+                "shedding_buses":      _shed_buses,
+            },
+            "line_idx_map":                     _line_idx_map,
+            "trafo_idx_map":                    _trafo_idx_map,
+            "max_loading_capacity":             _df_lines["max_loading_percent"].max(),
+        })
         if _df_trafo is not None and not _df_trafo.empty:
             st.session_state.max_loading_capacity_transformer = (
                 _df_trafo["max_loading_percent"].max()
@@ -1928,191 +1931,139 @@ elif selection == "Projected Operation - Under Current OPF":
         # ────────────────────────────────────────────────────────────────
         # Show cached tables even after you left the page
         # ────────────────────────────────────────────────────────────────
-        if st.session_state.bau_ready:
-            st.subheader("Day-End Summary")
-            st.dataframe(st.session_state.bau_day_end_df, use_container_width=True)
-        
-            st.subheader("Hourly Generation Cost")
-            st.dataframe(st.session_state.bau_hourly_cost_df, use_container_width=True)
+      # ░░ 3 · ALWAYS-VISIBLE OUTPUT (tables + map) ░░
+    if st.session_state.bau_ready:
 
-        # ─────────────────────────────────────────────────────────────────────────────
-        #  Visualise “Projected Operation – Under Current OPF”
-        #  (faithful port of your Colab visualisation)
-        # ─────────────────────────────────────────────────────────────────────────────
-        
-        # --------------------------------------------------------------------
-        # 1)  cache the heavy data that the visualiser needs
-        # --------------------------------------------------------------------
-        st.session_state.bau_results = {
-            "loading_percent_bau": _lp_bau,          # list< list<float> >
-            "shedding_buses":      _shed_buses       # [(hour, bus-id), …]
-        }
-        st.session_state.line_outages   = line_outages
-        st.session_state.line_idx_map   = _line_idx_map
-        st.session_state.trafo_idx_map  = _trafo_idx_map
-        
-        # maximum loading limits (used for the colour scale)
-        st.session_state.max_loading_capacity = _df_lines["max_loading_percent"].max()
-        if _df_trafo is not None and not _df_trafo.empty:
-                st.session_state.max_loading_capacity_transformer = (_df_trafo["max_loading_percent"].max())
-        
-        # --------------------------------------------------------------------
-        # 2)  UI – pick hour & render
-        # --------------------------------------------------------------------
-        # ────────────────────────────────────────────────────────────────
-# Visualise “Projected Operation – Under Current OPF”
-# ────────────────────────────────────────────────────────────────
-if st.session_state.bau_ready:
+        # 3-A · Summary tables
+        st.subheader("Day-End Summary")
+        st.dataframe(st.session_state.bau_day_end_df, use_container_width=True)
 
-    st.subheader("Visualize Projected Operation – Under Current OPF")
+        st.subheader("Hourly Generation Cost")
+        st.dataframe(st.session_state.bau_hourly_cost_df, use_container_width=True)
 
-    # hour picker that remembers its value
-    num_hours   = len(st.session_state.network_data['df_load_profile'])
-    hour_labels = [f"Hour {i}" for i in range(num_hours)]
-    st.selectbox(
-        "Select Hour to Visualize",
-        hour_labels,
-        index=st.session_state.bau_hour,
-        key="bau_hour",
-        help="Choose any hour; the map below refreshes automatically."
-    )
-
-    # ----------------------------------------------------------------
-    # build the map for the chosen hour
-    # ----------------------------------------------------------------
-    hr           = st.session_state.bau_hour
-    df_line      = st.session_state.network_data['df_line'].copy()
-    df_load      = st.session_state.network_data['df_load'].copy()
-    df_trafo     = st.session_state.network_data.get('df_trafo')
-    loading_rec  = st.session_state.bau_results['loading_percent_bau'][hr]
-    shed_buses   = st.session_state.bau_results['shedding_buses']
-    line_idx_map = st.session_state.line_idx_map
-    trafo_idx_map= st.session_state.trafo_idx_map
-    outages      = st.session_state.line_outages
-
-    # ---------- helper colour functions (unchanged) -----------------
-    def get_color(pct, max_cap):
-        if pct is None:                     return '#FF0000'
-        if pct == 0:                        return '#000000'
-        if pct <= 0.75 * max_cap:           return '#00FF00'
-        if pct <= 0.90 * max_cap:           return '#FFFF00'
-        if pct <  max_cap:                  return '#FFA500'
-        return '#FF0000'
-
-    get_color_trafo = get_color
-
-    # ---------- small helper to tell line vs trafo ------------------
-    def check_bus_pair_df(df_line, df_trafo, pair):
-        fbus, tbus = pair
-        if df_trafo is not None:
-            tf_match = (((df_trafo["hv_bus"] == fbus) & (df_trafo["lv_bus"] == tbus)) |
-                        ((df_trafo["hv_bus"] == tbus) & (df_trafo["lv_bus"] == fbus))).any()
-            if tf_match:
-                return True
-        ln_match = (((df_line["from_bus"] == fbus) & (df_line["to_bus"] == tbus)) |
-                    ((df_line["from_bus"] == tbus) & (df_line["to_bus"] == fbus))).any()
-        if ln_match:
-            return False
-        return None
-
-    # ---------- build GeoDataFrame ---------------------------------
-    df_line["geodata"] = df_line["geodata"].apply(
-        lambda x: [(lon, lat) for lat, lon in eval(x)] if isinstance(x, str) else x
-    )
-    gdf = gpd.GeoDataFrame(
-        df_line,
-        geometry=[LineString(coords) for coords in df_line["geodata"]],
-        crs="EPSG:4326",
-    )
-    gdf["idx"]      = gdf.index
-    gdf["loading"]  = gdf["idx"].map(
-        lambda i: loading_rec[i] if i < len(loading_rec) else 0.0
-    )
-
-    # ---------- mark weather-down equipment ------------------------
-    weather_down = set()
-    for fbus, tbus, start_hr in outages:
-        if hr >= start_hr:
-            is_tf = check_bus_pair_df(df_line, df_trafo, (fbus, tbus))
-            if is_tf:
-                idx = trafo_idx_map.get((fbus, tbus))
-                if idx is not None:
-                    weather_down.add(idx + len(df_line))
-            else:
-                idx = line_idx_map.get((fbus, tbus))
-                if idx is not None:
-                    weather_down.add(idx)
-    gdf["down_weather"] = gdf["idx"].isin(weather_down)
-
-    # ---------- Folium map -----------------------------------------
-    m = folium.Map(location=[27.0, 66.5], zoom_start=6, width=800, height=600)
-
-    max_line_cap = st.session_state.max_loading_capacity
-    max_trf_cap  = st.session_state.get(
-        "max_loading_capacity_transformer", max_line_cap
-    )
-    no_of_lines  = len(df_line)
-
-    def style_fn(feat):
-        p = feat["properties"]
-        if p.get("down_weather", False):
-            return {"color": "#000000", "weight": 3}
-        pct = p.get("loading", 0.0)
-        colour = (
-            get_color_trafo(pct, max_trf_cap)
-            if df_trafo is not None and p["idx"] >= no_of_lines
-            else get_color(pct, max_line_cap)
+        # 3-B · Hour picker (updates st.session_state.bau_hour automatically)
+        num_hours   = len(st.session_state.network_data['df_load_profile'])
+        st.selectbox(
+            "Select Hour to Visualize",
+            [f"Hour {i}" for i in range(num_hours)],
+            index=st.session_state.bau_hour,
+            key="bau_hour",
+            help="Choose any hour; the map refreshes automatically.",
         )
-        return {"color": colour, "weight": 3}
 
-    folium.GeoJson(
-        gdf.__geo_interface__,
-        name=f"Transmission Net – Hour {hr}",
-        style_function=style_fn,
-    ).add_to(m)
+        # 3-C · Build the map for that hour
+        hr           = st.session_state.bau_hour
+        df_line      = st.session_state.network_data['df_line'].copy()
+        df_load      = st.session_state.network_data['df_load'].copy()
+        df_trafo     = st.session_state.network_data.get('df_trafo')
+        loading_rec  = st.session_state.bau_results['loading_percent_bau'][hr]
+        shed_buses   = st.session_state.bau_results['shedding_buses']
+        line_idx_map = st.session_state.line_idx_map
+        trafo_idx_map= st.session_state.trafo_idx_map
+        outages      = st.session_state.line_outages
 
-    # ---------- load-bus circles -----------------------------------
-    shed_now = [b for (h, b) in shed_buses if h == hr]
-    for _, row in df_load.iterrows():
-        bus = row["bus"]
-        lat, lon = ast.literal_eval(row["load_coordinates"])
-        col = "red" if bus in shed_now else "green"
-        folium.Circle(
-            (lat, lon), radius=20000,
-            color=col, fill_color=col, fill_opacity=0.5
-        ).add_to(m)
+        # ── helper colour fns (same logic) ─────────────────────
+        def get_color(pct, max_cap):
+            if pct is None:                return '#FF0000'
+            if pct == 0:                   return '#000000'
+            if pct <= 0.75*max_cap:        return '#00FF00'
+            if pct <= 0.90*max_cap:        return '#FFFF00'
+            if pct <  max_cap:             return '#FFA500'
+            return '#FF0000'
+        get_color_trafo = get_color
 
-    # legend (same HTML as before)
-    legend_html = """
-    <style>.legend-entry { display:flex;align-items:center;margin-bottom:4px;}
-    .legend-swatch{width:12px;height:12px;margin-right:6px;display:inline-block;}
-    .circle{border-radius:70%;}</style>
-    <div style="background:#fff;padding:8px;border:1px solid #ccc;">
-    <strong>Line Load Level (% of Max) & Load Status</strong>
-    <div class='legend-entry'><span class='legend-swatch' style='background:#00FF00'></span>Below 75%</div>
-    <div class='legend-entry'><span class='legend-swatch' style='background:#FFFF00'></span>75-90%</div>
-    <div class='legend-entry'><span class='legend-swatch' style='background:#FFA500'></span>90-100%</div>
-    <div class='legend-entry'><span class='legend-swatch' style='background:#FF0000'></span>Overloaded Line (&gt;100%)</div>
-    <div class='legend-entry'><span class='legend-swatch' style='background:#000000'></span>Weather-Impacted Line</div>
-    <div class='legend-entry'><span class='legend-swatch circle' style='background:#008000'></span>Fully Served Load</div>
-    <div class='legend-entry'><span class='legend-swatch circle' style='background:#FF0000'></span>Not Fully Served Load</div>
-    </div>"""
-    m.get_root().html.add_child(folium.Element(legend_html))
+        # distinguish line vs trafo
+        def check_bus_pair_df(df_line, df_trafo, pair):
+            fbus, tbus = pair
+            if df_trafo is not None:
+                if (((df_trafo["hv_bus"] == fbus) & (df_trafo["lv_bus"] == tbus)) |
+                    ((df_trafo["hv_bus"] == tbus) & (df_trafo["lv_bus"] == fbus))).any():
+                    return True
+            if (((df_line["from_bus"] == fbus) & (df_line["to_bus"] == tbus)) |
+                ((df_line["from_bus"] == tbus) & (df_line["to_bus"] == fbus))).any():
+                return False
+            return None
 
-    # title
-    title_html = f"""
-    <div style='font-size:18px;font-weight:bold;
-                background:rgba(255,255,255,0.8);
-                padding:4px;'>
-    Projected Operation – Current OPF · Hour {hr}</div>"""
-    m.get_root().html.add_child(folium.Element(title_html))
+        # GeoDataFrame for lines
+        df_line["geodata"] = df_line["geodata"].apply(
+            lambda x: [(lon, lat) for lat, lon in eval(x)] if isinstance(x, str) else x
+        )
+        gdf = gpd.GeoDataFrame(
+            df_line,
+            geometry=[LineString(c) for c in df_line["geodata"]],
+            crs="EPSG:4326",
+        )
+        gdf["idx"]     = gdf.index
+        gdf["loading"] = gdf["idx"].map(lambda i: loading_rec[i] if i < len(loading_rec) else 0.0)
 
-    folium.LayerControl(collapsed=False).add_to(m)
+        # mark weather-down equipment
+        weather_down = set()
+        for fbus, tbus, start_hr in outages:
+            if hr >= start_hr:
+                is_tf = check_bus_pair_df(df_line, df_trafo, (fbus, tbus))
+                if is_tf:
+                    idx = trafo_idx_map.get((fbus, tbus))
+                    if idx is not None:
+                        weather_down.add(idx + len(df_line))
+                else:
+                    idx = line_idx_map.get((fbus, tbus))
+                    if idx is not None:
+                        weather_down.add(idx)
+        gdf["down_weather"] = gdf["idx"].isin(weather_down)
 
-    st.write(f"### Network Loading Visualization – Hour {hr}")
-    st_folium(m, width=800, height=600, key=f"bau_map_{hr}")
+        # Folium map
+        m = folium.Map(location=[27, 66.5], zoom_start=6, width=800, height=600)
+        max_line_cap = st.session_state.max_loading_capacity
+        max_trf_cap  = st.session_state.get("max_loading_capacity_transformer", max_line_cap)
+        no_of_lines  = len(df_line)
 
-    
+        def style_fn(feat):
+            p = feat["properties"]
+            if p.get("down_weather", False):
+                return {"color": "#000000", "weight": 3}
+            pct = p.get("loading", 0.0)
+            colour = (get_color_trafo(pct, max_trf_cap)
+                      if df_trafo is not None and p["idx"] >= no_of_lines
+                      else get_color(pct, max_line_cap))
+            return {"color": colour, "weight": 3}
+
+        folium.GeoJson(gdf.__geo_interface__, style_function=style_fn,
+                       name=f"Transmission Net – Hour {hr}").add_to(m)
+
+        # load circles
+        shed_now = [b for (h, b) in shed_buses if h == hr]
+        for _, row in df_load.iterrows():
+            bus = row["bus"]
+            lat, lon = ast.literal_eval(row["load_coordinates"])
+            col = "red" if bus in shed_now else "green"
+            folium.Circle((lat, lon), radius=20000,
+                          color=col, fill_color=col, fill_opacity=0.5).add_to(m)
+
+        # legend + title  (same HTML you used)
+        legend_html = """<style>.legend-entry{display:flex;align-items:center;margin-bottom:4px;}
+        .legend-swatch{width:12px;height:12px;margin-right:6px;display:inline-block;}
+        .circle{border-radius:70%;}</style>
+        <div style="background:#fff;padding:8px;border:1px solid #ccc;">
+        <strong>Line Load Level (% of Max) & Load Status</strong>
+        <div class='legend-entry'><span class='legend-swatch' style='background:#00FF00'></span>Below 75%</div>
+        <div class='legend-entry'><span class='legend-swatch' style='background:#FFFF00'></span>75–90%</div>
+        <div class='legend-entry'><span class='legend-swatch' style='background:#FFA500'></span>90–100%</div>
+        <div class='legend-entry'><span class='legend-swatch' style='background:#FF0000'></span>Overloaded &gt;100%</div>
+        <div class='legend-entry'><span class='legend-swatch' style='background:#000000'></span>Weather-Impacted</div>
+        <div class='legend-entry'><span class='legend-swatch circle' style='background:#008000'></span>Fully Served</div>
+        <div class='legend-entry'><span class='legend-swatch circle' style='background:#FF0000'></span>Not Fully Served</div>
+        </div>"""
+        m.get_root().html.add_child(folium.Element(legend_html))
+
+        title_html = f"""
+        <div style='font-size:18px;font-weight:bold;background:rgba(255,255,255,0.8);padding:4px;'>
+        Projected Operation – Current OPF · Hour {hr}</div>"""
+        m.get_root().html.add_child(folium.Element(title_html))
+
+        folium.LayerControl(collapsed=False).add_to(m)
+
+        st.write(f"### Network Loading Visualization – Hour {hr}")
+        st_folium(m, width=800, height=600, key=f"bau_map_{hr}")
 # ────────────────────────────────────────────────────────────────────────────
 # Page 4 :  Weather‑Aware System
 # ────────────────────────────────────────────────────────────────────────────
