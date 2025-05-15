@@ -2638,10 +2638,15 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
             "wa_trafo_idx_map":                trafo_idx_map,
             "wa_max_loading_capacity":         df_lines["max_loading_percent"].max(),
         })
-        if df_trafo is not None and not df_trafo.empty:
-            st.session_state.wa_max_loading_capacity_transformer = (
-                df_trafo["max_loading_percent"].max()
-            )
+        # if df_trafo is not None and not df_trafo.empty:
+        #     st.session_state.wa_max_loading_capacity_transformer = (
+        #         df_trafo["max_loading_percent"].max()
+        #     )
+
+        if isinstance(_df_trafo, pd.DataFrame) and not _df_trafo.empty:
+                st.session_state.max_loading_capacity_transformer = (
+                    _df_trafo["max_loading_percent"].max()
+                )
 
         # if st.session_state.wa_ready:
         #     st.subheader("Day-End Summary (Weather-Aware OPF)")
