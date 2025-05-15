@@ -2692,11 +2692,12 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
     
         # 2-B  hour picker (keeps its value in session_state.wa_hour) -----------
         num_hours = len(st.session_state.network_data['df_load_profile'])
-        st.selectbox(
+        hour_options = list(range(num_hours))     # [0,1,…,23]
+        hr = st.selectbox(
             "Select Hour to Visualize",
-            [f"Hour {i}" for i in range(num_hours)],
-            index=st.session_state.get("wa_hour", 0),
-            key="wa_hour",
+            hour_options,
+            format_func=lambda h: f"Hour {h}",    # still shows “Hour 0”…“Hour 23”
+            key="wa_hour",                        # now always an int
             help="Choose any hour; the map refreshes automatically.",
         )
     
