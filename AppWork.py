@@ -570,6 +570,43 @@ def overloaded_transformer(net, xls_file, line_outages):
                 overloaded.append(idx)
     return overloaded
 # -------------------------------------------------------------
+# ------------------------------------------------------------------
+# Ensure `path` is available everywhere once the user has uploaded
+# their Excel file on Page-1.
+# ------------------------------------------------------------------
+path = st.session_state.get("uploaded_file")   # BytesIO object
+
+
+# ------------------------------------------------------------------
+# generate_line_outages  – identical logic, NO print statements
+# ------------------------------------------------------------------
+def generate_line_outages(outage_hours, line_down, risk_scores,
+                          capped_contingency_mode=False):
+    if not outage_hours or not line_down or not risk_scores:
+        return []
+
+    sheet_name = "Line Parameters"
+    df_line = pd.read_excel(path, sheet_name=sheet_name)
+    no_of_lines_in_network = len(df_line) - 1
+    capped_limit = math.floor(0.2 * no_of_lines_in_network)
+
+    # Combine line, outage_hour, and risk into tuples
+    combined = [
+        (line[0], line[1], hour, risk)
+        for line, hour, risk in zip(line_down, outage_hours, risk_scores)
+    ]
+
+    # Sort by risk score in descending order
+    sorted_combined = sorted(combined, key=lambda x: x[-1], reverse=True)
+
+    # Extract only (from_bus, to_bus, outage_hour)
+    line_outages = [(line[0], line[1], line[2]) for line in sorted_combined]
+
+    if capped_contingency_mode and len(line_outages) > capped_limit:
+        line_outages = line_outages[:capped_limit]
+
+    return line_outages
+
 
 
 # Shared function: Create and display the map (used in Network Initialization)
