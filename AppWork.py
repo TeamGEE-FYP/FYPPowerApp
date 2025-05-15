@@ -2082,7 +2082,7 @@ elif selection == "Projected Operation - Under Current OPF":
              style="position:absolute; top:90px; left:10px; z-index:9999;
                     background:rgba(255,255,255,0.9); padding:4px;
                     font-size:18px; font-weight:bold;">
-          Projected Operation - Under Current OPF – Hour {hour_idx}
+          Projected Operation - Under Current OPF – Hour {hr}
         </div>
         """
         m.get_root().html.add_child(folium.Element(title_html))
