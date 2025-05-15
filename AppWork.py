@@ -374,19 +374,7 @@ elif selection == "Weather Risk Visualisation Using Google Earth Engine":
     # Display line_outages as a table
     st.write("Hardcoded Line Outages:")
     df_outages = pd.DataFrame(line_outages, columns=["From Bus", "To Bus", "Outage Hour"])
-    st.dataframe(df_outages)
-    
-    # Display session state line_outage_data as a combined table
-    st.write("Hardcoded Line Outage Data for Page 3:")
-    data = {
-        "From Bus": [line[0] for line in st.session_state.line_outage_data["lines"]],
-        "To Bus": [line[1] for line in st.session_state.line_outage_data["lines"]],
-        "Outage Hour": st.session_state.line_outage_data["hours"],
-        "Risk Score": st.session_state.line_outage_data["risk_scores"]
-    }
-    df_display = pd.DataFrame(data)
-    st.dataframe(df_display)
-                    
+    st.dataframe(df_outages)                
 
 # Page 3: Projected future operations - Under Current OPF
 elif selection == "Projected Operation - Under Current OPF":
