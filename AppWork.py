@@ -17,7 +17,6 @@ import math
 import traceback
 from shapely.geometry import LineString, Point
 
-
 # Set page configuration
 st.set_page_config(
     page_title="Continuous Monitoring of Climate Risks to Electricity Grid using Google Earth Engine",
@@ -93,6 +92,333 @@ def add_ee_layer(self, ee_object, vis_params, name):
 
 # Attach the method to folium.Map
 folium.Map.add_ee_layer = add_ee_layer
+
+# ---------------------------------------------------------------------
+# 1) Network INITIALISE  (was `Network_initialize` in Colab)
+# ---------------------------------------------------------------------
+@st.cache_data(show_spinner=False, suppress_st_warning=True)
+def network_initialize(xls_file):
+    """
+    Re-creates a fresh pandapower network from the uploaded Excel *every* time
+    Page-3 (baseline OPF) or Page-4 (weather-aware OPF) is run, so that both
+    simulations start from the identical initial state.
+
+    Parameters
+    ----------
+    xls_file : BytesIO or str
+        The same object you get back from `st.file_uploader` (i.e. the upload
+        stream).  A local file path also works, so existing unit-tests keep
+        passing.
+
+    Returns
+    -------
+    tuple
+        [net, df_bus, df_slack, df_line, num_hours,
+         load_dynamic, gen_dynamic,
+         df_load_profile, df_gen_profile, *optional df_trafo*]
+    """
+
+    # --- 0. Fresh empty network
+    net = pp.create_empty_network()
+
+    # --- 1. Read all static sheets ------------------------------------------------
+    df_bus   = pd.read_excel(xls_file, sheet_name="Bus Parameters",      index_col=0)
+    df_load  = pd.read_excel(xls_file, sheet_name="Load Parameters",     index_col=0)
+    df_slack = pd.read_excel(xls_file, sheet_name="Generator Parameters",index_col=0)
+    df_line  = pd.read_excel(xls_file, sheet_name="Line Parameters",     index_col=0)
+
+    # --- 2. Build static elements -------------------------------------------------
+    for _, row in df_bus.iterrows():
+        pp.create_bus(net,
+                      name          = row["name"],
+                      vn_kv         = row["vn_kv"],
+                      zone          = row["zone"],
+                      in_service    = row["in_service"],
+                      max_vm_pu     = row["max_vm_pu"],
+                      min_vm_pu     = row["min_vm_pu"])
+
+    for _, row in df_load.iterrows():
+        pp.create_load(net,
+                       bus           = row["bus"],
+                       p_mw          = row["p_mw"],
+                       q_mvar        = row["q_mvar"],
+                       in_service    = row["in_service"])
+
+    for _, row in df_slack.iterrows():
+        if row["slack_weight"] == 1:
+            ext_idx = pp.create_ext_grid(net,
+                                         bus        = row["bus"],
+                                         vm_pu      = row["vm_pu"],
+                                         va_degree  = 0)
+            pp.create_poly_cost(net, element=ext_idx, et="ext_grid",
+                                cp0_eur_per_mw = row["cp0_pkr_per_mw"],
+                                cp1_eur_per_mw = row["cp1_pkr_per_mw"],
+                                cp2_eur_per_mw = row["cp2_pkr_per_mw"],
+                                cp0_eur_per_mvar = row["cp0_pkr_per_mvar"],
+                                cq1_eur_per_mvar = row["cq1_pkr_per_mvar"],
+                                cq2_eur_per_mvar = row["cq2_pkr_per_mvar"])
+        else:
+            gen_idx = pp.create_gen(net,
+                                    bus         = row["bus"],
+                                    p_mw        = row["p_mw"],
+                                    vm_pu       = row["vm_pu"],
+                                    min_q_mvar  = row["min_q_mvar"],
+                                    max_q_mvar  = row["max_q_mvar"],
+                                    scaling     = row["scaling"],
+                                    in_service  = row["in_service"],
+                                    slack_weight= row["slack_weight"],
+                                    controllable= row["controllable"],
+                                    max_p_mw    = row["max_p_mw"],
+                                    min_p_mw    = row["min_p_mw"])
+            pp.create_poly_cost(net, element=gen_idx, et="gen",
+                                cp0_eur_per_mw = row["cp0_pkr_per_mw"],
+                                cp1_eur_per_mw = row["cp1_pkr_per_mw"],
+                                cp2_eur_per_mw = row["cp2_pkr_per_mw"],
+                                cp0_eur_per_mvar = row["cp0_pkr_per_mvar"],
+                                cq1_eur_per_mvar = row["cq1_pkr_per_mvar"],
+                                cq2_eur_per_mvar = row["cq2_pkr_per_mvar"])
+
+    for _, row in df_line.iterrows():
+        if pd.isna(row["parallel"]):
+            continue
+        geodata = ast.literal_eval(row["geodata"]) if isinstance(row["geodata"], str) else row["geodata"]
+        pp.create_line_from_parameters(net,
+                                       from_bus             = row["from_bus"],
+                                       to_bus               = row["to_bus"],
+                                       length_km            = row["length_km"],
+                                       r_ohm_per_km         = row["r_ohm_per_km"],
+                                       x_ohm_per_km         = row["x_ohm_per_km"],
+                                       c_nf_per_km          = row["c_nf_per_km"],
+                                       max_i_ka             = row["max_i_ka"],
+                                       in_service           = row["in_service"],
+                                       max_loading_percent  = row["max_loading_percent"],
+                                       geodata              = geodata)
+
+    # --- 3. Optional transformers -------------------------------------------------
+    xls_obj = pd.ExcelFile(xls_file)
+    if "Transformer Parameters" in xls_obj.sheet_names:
+        df_trafo = pd.read_excel(xls_file, sheet_name="Transformer Parameters", index_col=0)
+        for _, row in df_trafo.iterrows():
+            pp.create_transformer_from_parameters(net,
+                 hv_bus    = row["hv_bus"],
+                 lv_bus    = row["lv_bus"],
+                 sn_mva    = row["sn_mva"],
+                 vn_hv_kv  = row["vn_hv_kv"],
+                 vn_lv_kv  = row["vn_lv_kv"],
+                 vk_percent= row["vk_percent"],
+                 vkr_percent=row["vkr_percent"],
+                 pfe_kw    = row["pfe_kw"],
+                 i0_percent= row["i0_percent"],
+                 in_service=row["in_service"],
+                 max_loading_percent=row["max_loading_percent"])
+
+    # --- 4. Dynamic-profile helpers ----------------------------------------------
+    df_load_profile = pd.read_excel(xls_file, sheet_name="Load Profile")
+    df_load_profile.columns = df_load_profile.columns.str.strip()
+
+    load_dynamic = {}
+    for col in df_load_profile.columns:
+        m = re.match(r"p_mw_bus_(\d+)", col)
+        if m:
+            bus  = int(m.group(1))
+            qcol = f"q_mvar_bus_{bus}"
+            if qcol in df_load_profile.columns:
+                load_dynamic[bus] = {"p": col, "q": qcol}
+
+    df_gen_profile = pd.read_excel(xls_file, sheet_name="Generator Profile")
+    df_gen_profile.columns = df_gen_profile.columns.str.strip()
+
+    gen_dynamic = {}
+    for col in df_gen_profile.columns:
+        if col.startswith("p_mw"):
+            nums = re.findall(r"\d+", col)
+            if nums:
+                gen_dynamic[int(nums[-1])] = col
+
+    num_hours = len(df_load_profile)
+
+    # --- 5. Return exactly what Colab did -----------------------------------------
+    if "Transformer Parameters" in xls_obj.sheet_names:
+        return (net, df_bus, df_slack, df_line,
+                num_hours, load_dynamic, gen_dynamic,
+                df_load_profile, df_gen_profile, df_trafo)
+
+    return (net, df_bus, df_slack, df_line,
+            num_hours, load_dynamic, gen_dynamic,
+            df_load_profile, df_gen_profile)
+# ---------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Colab-equivalent: rebuild + 24-h OPF loop on every call
+# ---------------------------------------------------------------------------
+def calculating_hourly_cost(xls_file):
+    """
+    Streamlit drop-in replacement for the Colab routine.
+
+    Parameters
+    ----------
+    xls_file : BytesIO | str
+        The file object returned by `st.file_uploader` *or* a filesystem path.
+
+    Returns
+    -------
+    list
+        Length == number of rows in “Load Profile”.
+        Each element is net.res_cost (DataFrame) when OPF succeeded,
+        otherwise the integer 0.
+    """
+    # 0) Prep
+    xls = pd.ExcelFile(xls_file)
+    hourly_cost_list = []
+    net = pp.create_empty_network()
+
+    # 1) Static sheets ----------------------------------------------------------
+    df_bus   = pd.read_excel(xls_file, sheet_name="Bus Parameters",      index_col=0)
+    df_load  = pd.read_excel(xls_file, sheet_name="Load Parameters",     index_col=0)
+    df_slack = pd.read_excel(xls_file, sheet_name="Generator Parameters",index_col=0)
+    df_line  = pd.read_excel(xls_file, sheet_name="Line Parameters",     index_col=0)
+
+    # 2) Create buses -----------------------------------------------------------
+    for _, row in df_bus.iterrows():
+        pp.create_bus(net,
+                      name        = row["name"],
+                      vn_kv       = row["vn_kv"],
+                      zone        = row["zone"],
+                      in_service  = row["in_service"],
+                      max_vm_pu   = row["max_vm_pu"],
+                      min_vm_pu   = row["min_vm_pu"])
+
+    # 3) Create loads -----------------------------------------------------------
+    for _, row in df_load.iterrows():
+        pp.create_load(net,
+                       bus        = row["bus"],
+                       p_mw       = row["p_mw"],
+                       q_mvar     = row["q_mvar"],
+                       in_service = row["in_service"])
+
+    # 4) Create generators / ext-grid ------------------------------------------
+    for _, row in df_slack.iterrows():
+        if row["slack_weight"] == 1:
+            ext_idx = pp.create_ext_grid(net,
+                                         bus       = row["bus"],
+                                         vm_pu     = row["vm_pu"],
+                                         va_degree = 0)
+            pp.create_poly_cost(net, element=ext_idx, et="ext_grid",
+                                cp0_eur_per_mw   = row["cp0_pkr_per_mw"],
+                                cp1_eur_per_mw   = row["cp1_pkr_per_mw"],
+                                cp2_eur_per_mw   = row["cp2_pkr_per_mw"],
+                                cp0_eur_per_mvar = row["cp0_pkr_per_mvar"],
+                                cq1_eur_per_mvar = row["cq1_pkr_per_mvar"],
+                                cq2_eur_per_mvar = row["cq2_pkr_per_mvar"])
+        else:
+            gen_idx = pp.create_gen(net,
+                                    bus          = row["bus"],
+                                    p_mw         = row["p_mw"],     # overwritten hourly
+                                    vm_pu        = row["vm_pu"],
+                                    min_q_mvar   = row["min_q_mvar"],
+                                    max_q_mvar   = row["max_q_mvar"],
+                                    scaling      = row["scaling"],
+                                    in_service   = row["in_service"],
+                                    slack_weight = row["slack_weight"],
+                                    controllable = row["controllable"],
+                                    max_p_mw     = row["max_p_mw"],
+                                    min_p_mw     = row["min_p_mw"])
+            pp.create_poly_cost(net, element=gen_idx, et="gen",
+                                cp0_eur_per_mw   = row["cp0_pkr_per_mw"],
+                                cp1_eur_per_mw   = row["cp1_pkr_per_mw"],
+                                cp2_eur_per_mw   = row["cp2_pkr_per_mw"],
+                                cp0_eur_per_mvar = row["cp0_pkr_per_mvar"],
+                                cq1_eur_per_mvar = row["cq1_pkr_per_mvar"],
+                                cq2_eur_per_mvar = row["cq2_pkr_per_mvar"])
+
+    # 5) Create lines -----------------------------------------------------------
+    for _, row in df_line.iterrows():
+        if pd.isna(row["parallel"]):
+            continue
+        geodata = ast.literal_eval(row["geodata"]) if isinstance(row["geodata"], str) else row["geodata"]
+        pp.create_line_from_parameters(net,
+                                       from_bus            = row["from_bus"],
+                                       to_bus              = row["to_bus"],
+                                       length_km           = row["length_km"],
+                                       r_ohm_per_km        = row["r_ohm_per_km"],
+                                       x_ohm_per_km        = row["x_ohm_per_km"],
+                                       c_nf_per_km         = row["c_nf_per_km"],
+                                       max_i_ka            = row["max_i_ka"],
+                                       in_service          = row["in_service"],
+                                       max_loading_percent = row["max_loading_percent"],
+                                       geodata             = geodata)
+
+    # 6) Optional transformers ---------------------------------------------------
+    if "Transformer Parameters" in xls.sheet_names:
+        df_trafo = pd.read_excel(xls_file, sheet_name="Transformer Parameters", index_col=0)
+        for _, row in df_trafo.iterrows():
+            pp.create_transformer_from_parameters(net,
+                 hv_bus             = row["hv_bus"],
+                 lv_bus             = row["lv_bus"],
+                 sn_mva             = row["sn_mva"],
+                 vn_hv_kv           = row["vn_hv_kv"],
+                 vn_lv_kv           = row["vn_lv_kv"],
+                 vk_percent         = row["vk_percent"],
+                 vkr_percent        = row["vkr_percent"],
+                 pfe_kw             = row["pfe_kw"],
+                 i0_percent         = row["i0_percent"],
+                 in_service         = row["in_service"],
+                 max_loading_percent= row["max_loading_percent"])
+
+    # 7) Dynamic-profile helpers -------------------------------------------------
+    df_load_profile = pd.read_excel(xls_file, sheet_name="Load Profile")
+    df_load_profile.columns = df_load_profile.columns.str.strip()
+
+    load_dynamic = {}
+    for col in df_load_profile.columns:
+        m = re.match(r"p_mw_bus_(\d+)", col)
+        if m:
+            bus   = int(m.group(1))
+            q_col = f"q_mvar_bus_{bus}"
+            if q_col in df_load_profile.columns:
+                load_dynamic[bus] = {"p": col, "q": q_col}
+
+    df_gen_profile = pd.read_excel(xls_file, sheet_name="Generator Profile")
+    df_gen_profile.columns = df_gen_profile.columns.str.strip()
+
+    gen_dynamic = {}
+    for col in df_gen_profile.columns:
+        if col.startswith("p_mw"):
+            nums = re.findall(r"\d+", col)
+            if nums:
+                gen_dynamic[int(nums[-1])] = col
+
+    num_hours = len(df_load_profile)
+
+    # 8) Hour-by-hour OPF loop ---------------------------------------------------
+    for hour in range(num_hours):
+
+        # 8.1 update loads
+        for bus_id, cols in load_dynamic.items():
+            p_val = float(df_load_profile.at[hour, cols["p"]])
+            q_val = float(df_load_profile.at[hour, cols["q"]])
+            mask  = net.load.bus == bus_id
+            net.load.loc[mask, "p_mw"]  = p_val
+            net.load.loc[mask, "q_mvar"] = q_val
+
+        # 8.2 update gens / ext grid
+        for bus_id, col in gen_dynamic.items():
+            p_val = float(df_gen_profile.at[hour, col])
+            if bus_id in net.ext_grid.bus.values:
+                net.ext_grid.loc[net.ext_grid.bus == bus_id, "p_mw"] = p_val
+            else:
+                net.gen.loc[net.gen.bus == bus_id, "p_mw"] = p_val
+
+        # 8.3 run OPF
+        try:
+            pp.runopp(net)
+            hourly_cost_list.append(net.res_cost)
+        except Exception:
+            hourly_cost_list.append(0)
+            continue
+
+    return hourly_cost_list
 
 
 
