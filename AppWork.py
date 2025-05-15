@@ -420,6 +420,156 @@ def calculating_hourly_cost(xls_file):
 
     return hourly_cost_list
 
+# ------------------------------------------------------------------
+# 1)  all_real_numbers  — identical to your Colab version
+# ------------------------------------------------------------------
+def all_real_numbers(lst):
+    invalid_count = 0
+    for x in lst:
+        # 1) Not numeric
+        if not isinstance(x, (int, float)):
+            invalid_count += 1
+        # 2) NaN or infinite
+        elif not math.isfinite(x):
+            invalid_count += 1
+
+    if invalid_count > len(line_outages):
+        return False
+    return True
+
+
+# ------------------------------------------------------------------
+# 2)  overloaded_lines  — identical to your Colab version
+# ------------------------------------------------------------------
+def overloaded_lines(net):
+    overloaded = []
+    # turn loading_percent Series into a list once
+    loadings = transform_loading(net.res_line["loading_percent"])
+    real_check = all_real_numbers(net.res_line["loading_percent"].tolist())
+
+    for idx, (res, loading_val) in enumerate(zip(net.res_line.itertuples(), loadings)):
+        # grab this line’s own max
+        own_max = net.line.at[idx, "max_loading_percent"]
+        # print(f"max loading capacity @ id {id} is {own_max}.")
+
+        if not real_check:
+            # any NaN/non-numeric or at-limit is overloaded
+            if not isinstance(loading_val, (int, float)) or math.isnan(loading_val) or loading_val >= own_max:
+                overloaded.append(idx)
+        else:
+            # only truly > its own max
+            if loading_val is not None and not (isinstance(loading_val, float) and math.isnan(loading_val)) and loading_val > own_max:
+                overloaded.append(idx)
+    return overloaded
+
+# -------------------------------------------------------------
+# 1)  Does the (from_bus, to_bus) pair correspond to a trafo?
+# -------------------------------------------------------------
+def check_bus_pair(xls_file, bus_pair):
+    """
+    Parameters
+    ----------
+    xls_file : BytesIO | str
+        Same object you get from st.file_uploader – or a path.
+    bus_pair : tuple[int, int]
+        (from_bus, to_bus) to look up.
+
+    Returns
+    -------
+    True   → pair matches a transformer
+    False  → pair matches a line
+    None   → no match found
+    """
+    xls = pd.ExcelFile(xls_file)
+
+    if "Transformer Parameters" in xls.sheet_names:
+        transformer_df = pd.read_excel(xls_file, sheet_name="Transformer Parameters")
+        line_df        = pd.read_excel(xls_file, sheet_name="Line Parameters")
+
+        from_bus, to_bus = bus_pair
+
+        transformer_match = (
+            ((transformer_df["hv_bus"] == from_bus) & (transformer_df["lv_bus"] == to_bus)) |
+            ((transformer_df["hv_bus"] == to_bus) & (transformer_df["lv_bus"] == from_bus))
+        ).any()
+
+        line_match = (
+            ((line_df["from_bus"] == from_bus) & (line_df["to_bus"] == to_bus)) |
+            ((line_df["from_bus"] == to_bus)  & (line_df["to_bus"] == from_bus))
+        ).any()
+
+        if transformer_match:
+            return True
+        if line_match:
+            return False
+
+    # nothing matched
+    return None
+# -------------------------------------------------------------
+
+
+# -------------------------------------------------------------
+# 2)  Normalise “loading_percent” fields so units are consistent
+# -------------------------------------------------------------
+def transform_loading(a):
+    """
+    Multiplies every value < 2.5 by 100 so that fractional %
+    values (e.g. 0.95) become full percentages (95.0).
+    Works for scalars or lists.  Returns the same “shape” back.
+    """
+    if a is None:
+        return a
+
+    # turn scalars into a list for uniform processing
+    is_single = False
+    if isinstance(a, (int, float)):
+        a         = [a]
+        is_single = True
+
+    # decide whether conversion is needed
+    flag = True
+    for item in a:
+        if isinstance(item, (int, float)) and item >= 2.5:
+            flag = False
+
+    if flag:
+        a = [item * 100 if isinstance(item, (int, float)) else item for item in a]
+
+    return a[0] if is_single else a
+# -------------------------------------------------------------
+
+# -------------------------------------------------------------
+# 5)  Identify overloaded transformers (if any exist)
+# -------------------------------------------------------------
+def overloaded_transformer(net, xls_file, line_outages):
+    """
+    Same logic as Colab version but *xls_file* is explicit.
+    Returns list of transformer indices exceeding their max loading.
+    """
+    overloaded = []
+
+    xls = pd.ExcelFile(xls_file)
+    if "Transformer Parameters" not in xls.sheet_names:
+        return overloaded
+
+    loadings   = transform_loading(net.res_trafo["loading_percent"])
+    real_check = all_real_numbers(net.res_trafo["loading_percent"].tolist(),
+                                  line_outages)
+
+    for idx, (_, loading_val) in enumerate(zip(net.res_trafo.itertuples(),
+                                               loadings)):
+        own_max = net.trafo.at[idx, "max_loading_percent"]
+
+        if not real_check:
+            if (loading_val is not None and
+                not (isinstance(loading_val, float) and math.isnan(loading_val)) and
+                loading_val >= own_max):
+                overloaded.append(idx)
+        else:
+            if loading_val > own_max:
+                overloaded.append(idx)
+    return overloaded
+# -------------------------------------------------------------
 
 
 # Shared function: Create and display the map (used in Network Initialization)
