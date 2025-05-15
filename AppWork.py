@@ -2206,6 +2206,18 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
         )
         st.session_state.line_outages = line_outages        # (re-use later)
 
+         # ---------------------------------------------------------------------------
+        # Aliases so the Colab names still resolve
+        # ---------------------------------------------------------------------------
+        def Network_initialize():
+            return network_initialize(path)          # <— your global helper
+        
+        def overloaded_transformer_colab(net):
+            # keep original single-arg call signature
+            return overloaded_transformer(net, path, line_outages)
+        # ---------------------------------------------------------------------------
+        
+
         # -------------------------------------------------------------------
         # 1-B · DEFINE  weather_opf()   (same maths – no prints)
         # -------------------------------------------------------------------
