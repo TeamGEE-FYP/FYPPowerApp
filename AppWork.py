@@ -2609,17 +2609,187 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
         #     st.dataframe(st.session_state.wa_hourly_cost_df, use_container_width=True)
 
 
+    # if st.session_state.get("wa_ready", False):
+    
+    #     st.subheader("Day-End Summary (Weather-Aware OPF)")
+    #     st.dataframe(
+    #         st.session_state.wa_day_end_df, use_container_width=True
+    #     )
+    
+    #     st.subheader("Hourly Generation Cost (Weather-Aware OPF)")
+    #     st.dataframe(
+    #         st.session_state.wa_hourly_cost_df, use_container_width=True
+    #     )
+    # ░░ 1 ·  PERSIST RESULTS (right after weather_opf finishes) ░░
+    st.session_state.update({
+        "wa_ready":                        True,
+        "wa_day_end_df":                   day_end_df,
+        "wa_hourly_cost_df":               hourly_cost_df,
+        "wa_results": {                    # <── NEW: everything the map needs
+            "loading_percent_wa": loading_records,
+            "shedding_buses":    shedding_buses,
+        },
+        "wa_line_idx_map":                 line_idx_map,
+        "wa_trafo_idx_map":                trafo_idx_map,
+        "wa_max_loading_capacity":         df_lines["max_loading_percent"].max(),
+    })
+    if df_trafo is not None and not df_trafo.empty:
+        st.session_state.wa_max_loading_capacity_transformer = (
+            df_trafo["max_loading_percent"].max()
+        )
+    
+    # ░░ 2 · ALWAYS-VISIBLE OUTPUT (tables + 24-hour map picker) ░░
     if st.session_state.get("wa_ready", False):
     
+        # 2-A  summary tables ---------------------------------------------------
         st.subheader("Day-End Summary (Weather-Aware OPF)")
-        st.dataframe(
-            st.session_state.wa_day_end_df, use_container_width=True
-        )
+        st.dataframe(st.session_state.wa_day_end_df, use_container_width=True)
     
         st.subheader("Hourly Generation Cost (Weather-Aware OPF)")
-        st.dataframe(
-            st.session_state.wa_hourly_cost_df, use_container_width=True
+        st.dataframe(st.session_state.wa_hourly_cost_df, use_container_width=True)
+    
+        # 2-B  hour picker (keeps its value in session_state.wa_hour) -----------
+        num_hours = len(st.session_state.network_data['df_load_profile'])
+        st.selectbox(
+            "Select Hour to Visualize",
+            [f"Hour {i}" for i in range(num_hours)],
+            index=st.session_state.get("wa_hour", 0),
+            key="wa_hour",
+            help="Choose any hour; the map refreshes automatically.",
         )
+    
+        # 2-C  build the Folium map for that hour -------------------------------
+        hr              = st.session_state.wa_hour
+        df_line         = st.session_state.network_data['df_line'].copy()
+        df_load         = st.session_state.network_data['df_load'].copy()
+        df_trafo        = st.session_state.network_data.get('df_trafo')
+        loading_rec     = st.session_state.wa_results['loading_percent_wa'][hr]
+        shed_buses      = st.session_state.wa_results['shedding_buses']
+        line_idx_map    = st.session_state.wa_line_idx_map
+        trafo_idx_map   = st.session_state.wa_trafo_idx_map
+        outages         = st.session_state.line_outages          # created earlier
+    
+        # — helper colour fns (identical logic to Page-3) -----------------------
+        def get_color(pct, max_cap):
+            if pct is None:                return '#FF0000'
+            if pct == 0:                   return '#000000'
+            if pct <= 0.75*max_cap:        return '#00FF00'
+            if pct <= 0.90*max_cap:        return '#FFFF00'
+            if pct <  max_cap:             return '#FFA500'
+            return '#FF0000'
+        get_color_trafo = get_color
+    
+        def check_bus_pair_df(df_line, df_trafo, pair):
+            fbus, tbus = pair
+            if df_trafo is not None:
+                if (((df_trafo["hv_bus"] == fbus) & (df_trafo["lv_bus"] == tbus)) |
+                    ((df_trafo["hv_bus"] == tbus) & (df_trafo["lv_bus"] == fbus))).any():
+                    return True
+            if (((df_line["from_bus"] == fbus) & (df_line["to_bus"] == tbus)) |
+                ((df_line["from_bus"] == tbus) & (df_line["to_bus"] == fbus))).any():
+                return False
+            return None
+    
+        # lines → GeoDataFrame --------------------------------------------------
+        df_line["geodata"] = df_line["geodata"].apply(
+            lambda x: [(lon, lat) for lat, lon in eval(x)] if isinstance(x, str) else x
+        )
+        gdf = gpd.GeoDataFrame(
+            df_line,
+            geometry=[LineString(c) for c in df_line["geodata"]],
+            crs="EPSG:4326",
+        )
+        gdf["idx"]     = gdf.index
+        gdf["loading"] = gdf["idx"].map(lambda i: loading_rec[i] if i < len(loading_rec) else 0.0)
+    
+        # mark weather-down equipment
+        weather_down = set()
+        for fbus, tbus, start_hr in outages:
+            if hr >= start_hr:
+                is_tf = check_bus_pair_df(df_line, df_trafo, (fbus, tbus))
+                if is_tf:
+                    idx = trafo_idx_map.get((fbus, tbus))
+                    if idx is not None:
+                        weather_down.add(idx + len(df_line))
+                else:
+                    idx = line_idx_map.get((fbus, tbus))
+                    if idx is not None:
+                        weather_down.add(idx)
+        gdf["down_weather"] = gdf["idx"].isin(weather_down)
+    
+        # Folium map ------------------------------------------------------------
+        m = folium.Map(location=[27, 66.5], zoom_start=6, width=800, height=600)
+        max_line_cap = st.session_state.wa_max_loading_capacity
+        max_trf_cap  = st.session_state.get("wa_max_loading_capacity_transformer",
+                                            max_line_cap)
+        no_of_lines  = len(df_line)
+    
+        def style_fn(feat):
+            p = feat["properties"]
+            if p.get("down_weather", False):
+                return {"color": "#000000", "weight": 3}
+            pct = p.get("loading", 0.0)
+            colour = (get_color_trafo(pct, max_trf_cap)
+                      if df_trafo is not None and p["idx"] >= no_of_lines
+                      else get_color(pct, max_line_cap))
+            return {"color": colour, "weight": 3}
+    
+        folium.GeoJson(gdf.__geo_interface__, style_function=style_fn,
+                       name=f"Transmission Net – Hour {hr}").add_to(m)
+    
+        # load circles (served vs shed) ----------------------------------------
+        shed_now = [b for (h, b) in shed_buses if h == hr]
+        for _, row in df_load.iterrows():
+            bus = row["bus"]
+            lat, lon = ast.literal_eval(row["load_coordinates"])
+            col = "red" if bus in shed_now else "green"
+            folium.Circle((lat, lon), radius=20000,
+                          color=col, fill_color=col, fill_opacity=0.5).add_to(m)
+    
+        # legend + title (same HTML you used before) ----------------------------
+        legend_html = """
+        <style>
+          .legend-box,* .legend-box { color:#000 !important; }
+        </style>
+        
+        <div class="legend-box leaflet-control leaflet-bar"
+             style="position:absolute; top:150px; left:10px; z-index:9999;
+                    background:#ffffff; padding:8px; border:1px solid #ccc;
+                    font-size:14px; max-width:210px;">
+          <strong>Line Load Level&nbsp;(&#37; of Max)</strong><br>
+          <span style='display:inline-block;width:12px;height:12px;background:#00FF00;'></span>&nbsp;Below&nbsp;75&nbsp;%<br>
+          <span style='display:inline-block;width:12px;height:12px;background:#FFFF00;'></span>&nbsp;75–90&nbsp;%<br>
+          <span style='display:inline-block;width:12px;height:12px;background:#FFA500;'></span>&nbsp;90–100&nbsp;%<br>
+          <span style='display:inline-block;width:12px;height:12px;background:#FF0000;'></span>&nbsp;Overloaded&nbsp;>&nbsp;100&nbsp;%<br>
+          <span style='display:inline-block;width:12px;height:12px;background:#000000;'></span>&nbsp;Weather‑Impacted<br><br>
+        
+          <strong>Load Status</strong><br>
+          <span style='display:inline-block;width:12px;height:12px;background:#008000;border-radius:50%;'></span>&nbsp;Fully Served<br>
+          <span style='display:inline-block;width:12px;height:12px;background:#FF0000;border-radius:50%;'></span>&nbsp;Not Fully Served
+        </div>
+        """
+        m.get_root().html.add_child(folium.Element(legend_html))
+    
+       # ---------------- title (overwrite your title_html string) -----------------
+        title_html = f"""
+        <style>
+          .map-title {{ color:#000 !important; }}
+        </style>
+        
+        <div class="map-title leaflet-control leaflet-bar"
+             style="position:absolute; top:90px; left:10px; z-index:9999;
+                    background:rgba(255,255,255,0.9); padding:4px;
+                    font-size:18px; font-weight:bold;">
+          Projected Operation - Under Weather Risk Aware OPF – Hour {hr}
+        </div>
+        """
+        m.get_root().html.add_child(folium.Element(title_html))
+    
+        folium.LayerControl(collapsed=False).add_to(m)
+    
+        st.write(f"### Network Loading Visualization – Hour {hr}")
+        st_folium(m, width=800, height=600, key=f"wa_map_{hr}")
+
 
 
 
