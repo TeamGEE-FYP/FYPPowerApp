@@ -48,7 +48,7 @@ initialize_ee()
 
 # Sidebar navigation
 st.sidebar.title("Navigation")
-pages = ["About the App and Developers", "Network Initialization", "Weather Risk Visualisation Using GEE", "Projected future operations - Under Current OPF", "Projected Operation Under Weather Risk Aware OPF", "Data Analytics"]
+pages = ["About the App and Developers", "Network Initialization", "Weather Risk Visualisation Using Google Earth Engine", "Projected Operation - Under Current OPF", "Projected Operation - Under Weather Risk Aware OPF", "Data Analytics"]
 selection = st.sidebar.radio("Go to", pages)
 
 # Shared session state initialization
@@ -397,7 +397,7 @@ if selection == "Network Initialization":
     # uploaded_file = st.file_uploader("Upload your network Excel file (e.g., Final_IEEE_9Bus_Parameters_only.xlsx)", type=["xlsx"], key="file_uploader")
 
     st.markdown(
-    "[Download the sample IEEE‑9 or 14 bus network parameters](https://drive.google.com/drive/folders/1oT10dY6hZiM0q3AYiFzEqe_GQ5vA-eEa?usp=sharing) "
+    "Donot have an Excel File in our specified format? [Download the sample IEEE‑9 or 14 bus network parameters](https://drive.google.com/drive/folders/1oT10dY6hZiM0q3AYiFzEqe_GQ5vA-eEa?usp=sharing) "
     "from Google Drive.",
     unsafe_allow_html=True,
     )
@@ -615,7 +615,7 @@ if selection == "Network Initialization":
         st.info("Please upload an Excel file to proceed.")
         
 # Page 2: Weather Risk Visualisation Using GEE
-elif selection == "Weather Risk Visualisation Using GEE":
+elif selection == "Weather Risk Visualisation Using Google Earth Engine":
     st.title("Weather Risk Visualisation Using GEE")
 
     # Create columns for dropdown menus
@@ -655,7 +655,7 @@ elif selection == "Weather Risk Visualisation Using GEE":
     else:
         # Button to process and show results
         if st.button("Process Weather Risk Data"):
-            with st.spinner("Processing weather risk data..."):
+            with st.spinner("Processing weather risk data (Estimated Time 5-15 minutes)..."):
                 try:
                     # Initialize Earth Engine if not already done
                     try:
@@ -1269,10 +1269,10 @@ elif selection == "Weather Risk Visualisation Using GEE":
             else:
                 st.info("Select parameters and click 'Process Weather Risk Data' to analyze weather risks to the electricity grid.")
                 
-
+ 
 # Page 3: Projected future operations - Under Current OPF
-elif selection == "Projected future operations - Under Current OPF":
-    st.title("Projected future operations - Under Current OPF")
+elif selection == "Projected Operation - Under Current OPF":
+    st.title("Projected Operation - Under Current OPF")
     
     # Validate required data
     required_keys = ['df_bus', 'df_load', 'df_gen', 'df_line', 'df_load_profile', 'df_gen_profile']
@@ -1303,8 +1303,8 @@ elif selection == "Projected future operations - Under Current OPF":
         capped_contingency = contingency_mode == "Capped Contingency Mode"
         
         # Button to run analysis
-        if st.button("Run Projected future operations - Under Current OPF Analysis"):
-            with st.spinner("Running Projected future operations - Under Current OPF analysis..."):
+        if st.button("Run Projected Operation - Under Current OPF Analysis"):
+            with st.spinner("Running Projected Operation - Under Current OPF analysis..."):
                 try:
                     # Extract data
                     network_data = st.session_state.network_data
@@ -1388,11 +1388,11 @@ elif selection == "Projected future operations - Under Current OPF":
                             try:
                                 pp.runpp(net)
                             except:
-                                # business_as_usual_cost[hour] = 0
-                                # served_load_per_hour.append([None] * len(net.load))
-                                # gen_per_hour_bau.append([None] * len(net.res_gen))
-                                # slack_per_hour_bau.append(None)
-                                # loading_percent_bau.append([None] * (len(net.line) + (len(net.trafo) if df_trafo is not None else 0)))
+                                business_as_usual_cost[hour] = 0
+                                served_load_per_hour.append([None] * len(net.load))
+                                gen_per_hour_bau.append([None] * len(net.res_gen))
+                                slack_per_hour_bau.append(None)
+                                loading_percent_bau.append([None] * (len(net.line) + (len(net.trafo) if df_trafo is not None else 0)))
                                 continue
                             
                             # Record loadings
@@ -1433,17 +1433,17 @@ elif selection == "Projected future operations - Under Current OPF":
                                         try:
                                             try:
                                                 pp.runopp(net)
-                                                business_as_usuall_cost[hour] = net.res_cost if net.OPF_converged else business_as_usuall_cost[hour]
-                                                # if net.OPF_converged:
-                                                #     business_as_usual_cost[hour] = net.res_cost
+                                                # business_as_usuall_cost[hour] = net.res_cost if net.OPF_converged else business_as_usuall_cost[hour]
+                                                if net.OPF_converged:
+                                                    business_as_usual_cost[hour] = net.res_cost
                                             except:
                                                 pp.runpp(net)
                                                 pass
                                         except:
-                                            # business_as_usual_cost[hour] = 0
-                                            # overloads.clear()
-                                            # if df_trafo is not None:
-                                            #     overloads_trafo.clear()
+                                            business_as_usual_cost[hour] = 0
+                                            overloads.clear()
+                                            if df_trafo is not None:
+                                                overloads_trafo.clear()
                                             break
                                         if dp < 0.01:
                                             all_loads_zero_flag = True
@@ -1458,12 +1458,9 @@ elif selection == "Projected future operations - Under Current OPF":
                                                 net.load.at[i, 'q_mvar'] = 0
                                             break
                                     if not overloads and not overloads_trafo:
-                                            if net.OPF_converged:
-                                                    business_as_usuall_cost[hour] = net.res_cost
-                                            break
-                                
-                                # overloads = overloaded_lines(net, max_loading_capacity)
-                                # overloads_trafo = overloaded_transformer(net, max_loading_capacity_transformer)
+                                        break
+                                overloads = overloaded_lines(net, max_loading_capacity)
+                                overloads_trafo = overloaded_transformer(net, max_loading_capacity_transformer)
                             
                             # Record final state
                             served_load_per_hour.append(net.load["p_mw"].tolist() if not net.load["p_mw"].isnull().any() else [None] * len(net.load))
@@ -1528,7 +1525,7 @@ elif selection == "Projected future operations - Under Current OPF":
                     }
                     
                 except Exception as e:
-                    st.error(f"Error running Projected future operations - Under Current OPF analysis: {str(e)}")
+                    st.error(f"Error running Projected Operation - Under Current OPF analysis: {str(e)}")
                     st.error(traceback.format_exc())
         
         if st.session_state.bau_results is not None:
@@ -1562,14 +1559,14 @@ elif selection == "Projected future operations - Under Current OPF":
         # ────────────────────────────────────────────────────────────────────────────
         # Visualisation – Projected future operations - Under Current OPF (final fix)
         # ────────────────────────────────────────────────────────────────────────────
-        st.subheader("Visualize Projected future operations - Under Current OPF")
+        st.subheader("Visualize Projected Operation - Under Current OPF")
         
         # initialise session key that remembers which hour to show
         if "visualize_hour" not in st.session_state:
             st.session_state.visualize_hour = None
         
         if st.session_state.bau_results is None:
-            st.info("Please run the Projected future operations - Under Current OPF analysis first.")
+            st.info("Please run the Projected Operation - Under Current OPF analysis first.")
         else:
             num_hours   = len(st.session_state.network_data['df_load_profile'])
             hour_labels = [f"Hour {i}" for i in range(num_hours)]
@@ -1700,7 +1697,7 @@ elif selection == "Projected future operations - Under Current OPF":
                      style="position:absolute; top:90px; left:10px; z-index:9999;
                             background:rgba(255,255,255,0.9); padding:4px;
                             font-size:18px; font-weight:bold;">
-                  Projected future operations - Under Current OPF – Hour {hour_idx}
+                  Projected Operation - Under Current OPF – Hour {hour_idx}
                 </div>
                 """
                 m.get_root().html.add_child(folium.Element(title_html))
@@ -1719,15 +1716,15 @@ elif selection == "Projected future operations - Under Current OPF":
 # ────────────────────────────────────────────────────────────────────────────
 # Page 4 :  Weather‑Aware System
 # ────────────────────────────────────────────────────────────────────────────
-elif selection == "Projected Operation Under Weather Risk Aware OPF":
-    st.title("Projected Operation Under Weather Risk Aware OPF")
+elif selection == "Projected Operation - Under Weather Risk Aware OPF":
+    st.title("Projected Operation - Under Weather Risk Aware OPF")
 
     # --- sanity checks ------------------------------------------------------
     req_keys = ["network_data", "line_outage_data", "bau_results"]
     if any(k not in st.session_state or st.session_state[k] is None for k in req_keys):
         st.warning(
             "Run **Network Initialization**, **Weather Risk Visualisation**, "
-            "and **Projected future operations - Under Current OPF** first."
+            "and **Projected Operation - Under Current OPF** first."
         )
         st.stop()
 
@@ -2004,7 +2001,7 @@ elif selection == "Projected Operation Under Weather Risk Aware OPF":
         wa_res   = st.session_state.weather_aware_results
         bau_cost = st.session_state.bau_results["business_as_usual_cost"]
 
-        st.subheader("Day‑End Summary (Weather‑Aware)")
+        st.subheader("Day‑End Summary (Weather‑Risk Aware OPF)")
 
         # load‑shedding per bus --------------------------------------------
         shed_tbl = []
@@ -2022,9 +2019,9 @@ elif selection == "Projected Operation Under Weather Risk Aware OPF":
         # hourly gen cost ---------------------------------------------------
         cost_tbl = pd.DataFrame({
             "Hour"                      : list(range(num_hours)),
-            "Weather‑Aware Cost (PKR)"  : [round(c,2) for c in wa_res["cost"]],
-            "BAU Cost (PKR)"            : [round(c,2) for c in bau_cost],
-            "Δ Cost (WA – BAU)"         : [round(w-b,2) for w,b in zip(wa_res["cost"], bau_cost)],
+            "Weather Risk Aware OPF Cost (PKR)"  : [round(c,2) for c in wa_res["cost"]],
+            "Under Current OPF Cost (PKR)"            : [round(c,2) for c in bau_cost],
+            "Δ Cost (WA – Current OPF)"         : [round(w-b,2) for w,b in zip(wa_res["cost"], bau_cost)],
         })
         st.write("### Hourly Generation Cost Comparison")
         st.dataframe(cost_tbl, use_container_width=True)
@@ -2036,12 +2033,12 @@ elif selection == "Projected Operation Under Weather Risk Aware OPF":
             st.session_state.wa_vis_hour = None
 
         hr_label = st.selectbox(
-            "Select Hour to Visualize (Weather‑Aware)",
+            "Select Hour to Visualize (Weather‑Risk Aware)",
             [f"Hour {i}" for i in range(num_hours)]
         )
         want_hr  = int(hr_label.split()[-1])
 
-        if st.button("Generate WA Visualization"):
+        if st.button("Generate Weather Aware Visualization"):
             st.session_state.wa_vis_hour = want_hr
 
         if st.session_state.wa_vis_hour is not None:
@@ -2178,7 +2175,7 @@ elif selection == "Projected Operation Under Weather Risk Aware OPF":
                  style="position:absolute; top:90px; left:10px; z-index:9999;
                         background:rgba(255,255,255,0.9); padding:4px;
                         font-size:18px; font-weight:bold;">
-              Weather Aware – Hour {h}
+              Projected Operation - Under Weather Risk Aware OPF – Hour {h}
             </div>
             """
             m.get_root().html.add_child(folium.Element(title_html))
@@ -2549,7 +2546,7 @@ elif selection == "Data Analytics":
         "weather_aware_results" not in st.session_state or
         st.session_state.bau_results is None or
         st.session_state.weather_aware_results is None):
-        st.info("Run **Projected future operations - Under Current OPF** and **Weather‑Aware System** first.")
+        st.info("Run **Projected Operation - Under Current OPF** and **Weather‑Aware System** first.")
         st.stop()
 
     # ── common data ─────────────────────────────────────────────────────────
@@ -2628,8 +2625,8 @@ elif selection == "Data Analytics":
             fill="toself", fillcolor="rgba(255,140,0,0.3)",
             line=dict(color="rgba(0,0,0,0)"),
             name="Cost Difference"))
-        fig2.add_trace(go.Scatter(x=hours, y=cost_bau_M, name="Projected Operations: Current OPF Cost"))
-        fig2.add_trace(go.Scatter(x=hours, y=cost_wa_M,  name="Projected Operations: Weather Risk Aware Cost"))
+        fig2.add_trace(go.Scatter(x=hours, y=cost_bau_M, name="Projected Operation: Current OPF Cost"))
+        fig2.add_trace(go.Scatter(x=hours, y=cost_wa_M,  name="Projected Operation: Weather Risk Aware Cost"))
         fig2.update_layout(title="Hourly Cost Difference", xaxis_title="Hour", yaxis_title="Million PKR", template="plotly_dark")
         st.plotly_chart(fig2, use_container_width=True)
 
@@ -2652,12 +2649,12 @@ elif selection == "Data Analytics":
 
         fig2b = go.Figure()
         # generation‐cost difference region
-        # fig2b.add_trace(go.Scatter(
-        #     x=hours, y=lost_savings, fill="tozeroy", mode="none",
-        #     name="Difference in Generation Cost",
-        #     fillcolor="rgba(255,99,71,0.6)",
-        #     hovertemplate="Hour %{x}: %{y:.2f} M PKR<extra></extra>"
-        # ))
+        fig2b.add_trace(go.Scatter(
+            x=hours, y=lost_savings, fill="tozeroy", mode="none",
+            name="Difference in Generation Cost",
+            fillcolor="rgba(255,99,71,0.6)",
+            hovertemplate="Hour %{x}: %{y:.2f} M PKR<extra></extra>"
+        ))
         # lost‐load revenue region
         fig2b.add_trace(go.Scatter(
             x=hours, y=diff_ld, fill="tozeroy", mode="none",
@@ -2686,13 +2683,13 @@ elif selection == "Data Analytics":
         fig3 = go.Figure()
         for i in range(lb_bau.shape[1]):
             fig3.add_trace(go.Scatter(x=x, y=lb_bau[:,i], name=legends[i], line=dict(color=colours[i])))
-        fig3.update_layout(title='Projected future operations - Current OPF Line Loading Over Time', xaxis_title="Hour", yaxis_title="%", template="plotly_dark")
+        fig3.update_layout(title='Projected Operation - Current OPF Line Loading Over Time', xaxis_title="Hour", yaxis_title="%", template="plotly_dark")
         st.plotly_chart(fig3, use_container_width=True)
         # WA
         fig3b = go.Figure()
         for i in range(lb_wa.shape[1]):
             fig3b.add_trace(go.Scatter(x=x, y=lb_wa[:,i], name=legends[i], line=dict(dash="dash", color=colours[i])))
-        fig3b.update_layout(title='Projected future operations - Weather Risk Aware OPF Line Loading Over Time', xaxis_title="Hour", yaxis_title="%", template="plotly_dark")
+        fig3b.update_layout(title='Projected Operation - Weather Risk Aware OPF Line Loading Over Time', xaxis_title="Hour", yaxis_title="%", template="plotly_dark")
         st.plotly_chart(fig3b, use_container_width=True)
 
     st.markdown("---")
@@ -2704,8 +2701,8 @@ elif selection == "Data Analytics":
         sl_bau = st.session_state.bau_results["slack_per_hour_bau"]
         sl_wa  = st.session_state.weather_aware_results["slack_per_hour"]
         fig4 = go.Figure()
-        fig4.add_bar(x=list(range(24)), y=sl_bau, name="Projected future operations - Current OPF Slack")
-        fig4.add_bar(x=list(range(24)), y=sl_wa,  name="Projected future operations - Weather Risk Aware OPF Slack")
+        fig4.add_bar(x=list(range(24)), y=sl_bau, name="Projected Operation - Current OPF Slack")
+        fig4.add_bar(x=list(range(24)), y=sl_wa,  name="Projected Operation - Weather Risk Aware OPF Slack")
         fig4.update_layout(barmode="group", title="Slack Generator Dispatch", xaxis_title="Hour", yaxis_title="MWh", template="plotly_dark")
         st.plotly_chart(fig4, use_container_width=True)
 
@@ -2727,15 +2724,15 @@ elif selection == "Data Analytics":
             wa  = [h[idx] for h in st.session_state.weather_aware_results["served_load"]]
             fig6 = go.Figure()
             fig6.add_bar(x=hours, y=dem, name="Demand")
-            fig6.add_bar(x=hours, y=bau, name="Projected future operations - Current OPF Served")
-            fig6.add_bar(x=hours, y=wa,  name="Projected future operations - Weather Risk Aware OPF Served")
+            fig6.add_bar(x=hours, y=bau, name="Projected Operation - Current OPF Served")
+            fig6.add_bar(x=hours, y=wa,  name="Projected Operation - Weather Risk Aware OPF Served")
             fig6.update_layout(barmode="group", title=f"Load‑Served @ Bus {b}", xaxis_title="Hour", yaxis_title="MWh", template="plotly_dark")
             st.plotly_chart(fig6, use_container_width=True)
         else:
             st.warning(f"No profile data for bus {b}.")
 
 
-    # # ── PLOT 5: Generator Dispatch @ Selected Generator ────────────────────
+    # # # ── PLOT 5: Generator Dispatch @ Selected Generator ────────────────────
     # gen = st.selectbox("Select Generator Bus", valid_gens, key="gen_to_plot")
     # if st.button("5) Show Generator Dispatch Comparison"):
     #     st.session_state.show_gen = True
@@ -2748,8 +2745,8 @@ elif selection == "Data Analytics":
     #     wa   = [h[idx] for h in st.session_state.weather_aware_results["gen_per_hour"]]
     #     fig5 = go.Figure()
     #     fig5.add_bar(x=hours, y=orig, name="Planned")
-    #     fig5.add_bar(x=hours, y=bau,  name="BAU")
-    #     fig5.add_bar(x=hours, y=wa,   name="WA")
+    #     fig5.add_bar(x=hours, y=bau,  name="Projected Operation - Under Current OPF")
+    #     fig5.add_bar(x=hours, y=wa,   name="Projected Operation - Under Weather Risk Aware OPF")
     #     fig5.update_layout(barmode="group", title=f"Dispatch @ Gen {b}", xaxis_title="Hour", yaxis_title="MWh", template="plotly_dark")
     #     st.plotly_chart(fig5, use_container_width=True)
 
@@ -2761,56 +2758,96 @@ elif selection == "Data Analytics":
 # Page 0 :  About the App
 # ────────────────────────────────────────────────────────────────────────────
 elif selection == "About the App and Developers":
-    st.title("Continuous Monitoring of Climate Risks to Electricity Grids")
+    st.title("Continuous Monitoring of Climate Risks to Electricity Grids using Google Earth Engine")
 
     st.markdown(
         """
         ### Overview  
-        This Streamlit application demonstrates an **end‑to‑end decision‑support
-        workflow** for power‑system planners and operators:
+        This web application gives an end to end decision support workflow for Grid Operators. It contains following five pages whose description is as follows:
 
-        1. **Network Initialization** – ingest IEEE‑style Excel parameters and visualise the grid.  
-        2. **Weather‑Risk Visualisation** – query Google Earth Engine in real‑time to map historic occurrences and *day‑ahead* extremes of temperature, precipitation and wind.  
-        3. **Business‑As‑Usual (BAU) Simulation** – run a baseline OPF / PF for 24 h under normal operating assumptions.  
-        4. **Weather‑Aware Simulation** – re‑run the 24‑hour horizon while proactively tripping lines/transformers expected to be weather‑impacted, then apply an OPF with load‑shedding logic.  
-        5. **Data Analytics** – interactive plots to compare costs, load‑shedding and line‑load evolution between BAU and Weather‑Aware modes.
+        1. **Network Initialization** – This page ask user to input the Excel File containing Transmission Network Information.  
+        2. **Weather‑Risk Visualisation** – This page ask user to set the Weather Analysis Parameters (see below for their details) and then utilize Google Earth Engine to analyze historic and forecasted weather data for day ahead.  
+        3. **Projected Operation - Under Current OPF** – This page ask user to select contingency mode (see below for its details) and then yield 24 hourly electric grid operations along with the visualization on map for day ahead. This mode represents the usual operations of electric utilities where the generation does not account for historic weather data and projected extreme weather events that would cause transmissions lines to fail.  
+        4. **Projected Operation - Under Weather Risk Aware OPF** – This page ask user to select contingency mode (see below for its details) and then yield 24 hourly operations along with the visualization on map for day ahead. This mode shows the vitality of our tool when it helps utilities to prepare the generation schedule for day ahead while incorporating historic and forecasted weather data and extreme weather risks to the electric grid. 
+        5. **Data Analytics** – This page comprises of interactive comparative plots to show comparative analysis between the Projected Operations Under Current OPF vs Weather Risk Aware OPF in terms of cost, amount of load shedding, line loadings, estimated revenue loss under the “Projected Operation Under Current OPF” scenario and the hourly generation and load values. 
+        
+        The goal is to **quantify the technical and economic benefit** of risk aware dispatch decisions—highlighting potential lost revenue and critical load not served under various contingencies.
 
-        The goal is to **quantify the technical and economic benefit** of risk‑aware
-        dispatch decisions—highlighting *potential lost revenue* and critical load
-        not served under various contingencies.
-
+        **While an analysis is running, please remain on that page until it finishes. Once the process is complete, you’re free to navigate to any page and explore all options.**
+        
         ---
 
-        ### Quick Links  
+        ### Want to learn more about our Web App?  
         * 📄 **Full Research Thesis** – [Google Drive (PDF)](https://drive.google.com/drive/folders/1mzGOuPhHn2UryrB2q5K4AZH2bPutvNhF?usp=drive_link)  
         * ▶️ **Video Walk‑Through / Tutorial** – [YouTube](https://youtu.be/your-tutorial-video)  
 
         ---
 
+        ### Key Terminologies
+
+        1)	Weather Analysis Parameters: These are the three parameters set by grid operators.
+            *	Risk Tolerance (Low, Medium, and High)
+            *	Study Period (Weekly, Monthly)
+            *	Risk Score Threshold (6-18)
+        2)	Projected Operation Under Current OPF and Projected Operation Under Weather Risk Aware OPF has following options.
+            *  Contingency Mode Selection
+
+        ### Risk Tolerance
+        
+        * Low: In the Low option, the following weather conditions are considered as thresholds beyond which the weather conditions would cause increased vulnerability to that specific region and a threat to electric network. The threshold values are:                                                                   Temperature > 35°C, Precipitation > 50 mm, Wind > 10 m/s.
+        
+        * Medium: In the Medium option, the following weather conditions are considered as thresholds beyond which the weather conditions would cause increased vulnerability to that specific region and a threat to electric network. The threshold values are: Temperature > 38°C, Precipitation > 100 mm, Wind > 15 m/s.
+        
+        * High: In the High option, the following weather conditions are considered as thresholds beyond which the weather conditions would cause increased vulnerability to that specific region and a threat to electric network. The threshold values are: Temperature > 41°C, Precipitation > 150 mm, Wind > 20 m/s.
+        
+        We can also say that these parameters would be based on how resilient an input network is. With Low means the network is least resilient and high means that network is strong against the extreme weather events.
+
+        ### Study Period
+        
+        * Weekly: Under this option the tool will use weekly weather information (weekly aggregated data) for the historic weather analysis.
+        
+        * Monthly: Under this option the tool will use monthly weather information (monthly aggregated data) for the historic weather analysis.
+
+        ### Risk Score Threshold
+        
+        * Risk Score can be chosen on a scale of 6-18 which is important for post weather data analysis. Using our novel Risk scoring Algorithm, when the risk scores are generated for each transmission lines for day ahead, this parameter decides which lines would fail on which projected hour during upcoming extreme weather event.
+
+        ### Contingency Mode Selection:
+        
+        The Contingency Mode parameter allows the user to define the operational scope of the system’s vulnerability simulation by selecting between two distinct failure modeling strategies. This choice directly impacts the number of lines that would be down after risk scores have been computed for all transmission lines.
+        
+        * Capped Contingency Mode: This mode evaluates system stability under a constrained failure scenario, assuming that only 20% of the at-risk transmission lines (as identified by the risk score threshold) of the total lines will fail. Any additional forecasted failures beyond this cap are deprioritized, reflecting conservative grid planning under limited disruption assumptions.
+        
+        * Maximum Contingency Mode: In contrast, this mode simulates a worst-case scenario by assuming that all transmission lines flagged as high risk will fail. It supports comprehensive stress-testing of the network, providing insights into cascading failure risks, load redistribution behavior, and potential stability violations under extreme weather-induced conditions
+
+         ---
+         
         ### Key Features
-        * **Google Earth Engine Integration** for live climate‑risk scoring  
-        * **Pandapower OPF / PF** with automated load‑shedding heuristics  
-        * **Folium‑based maps** with custom legends for line‑loading & outages  
-        * **Plotly analytics dashboard** for post‑simulation insights
+        * **Google Earth Engine Integration** is utilized for having rich historic weather data as well as forecasted weather data. 
+        * **Pandapower** is utilized for performing Optimal Power Flow (OPF) Analysis for finding optimized generation dispatch and calculation of lost load. 
+        * **GEE, Folium based maps and Plotly analytics** are used for hourly visualization in both scenarios and interactive plots in comparative analysis.
 
         ---
 
         ### Usage Workflow
         1. Navigate left‑hand sidebar → **Network Initialization** and upload your Excel model.  
         2. Tune thresholds on **Weather Risk Visualisation** and press *Process*.  
-        3. Run **Projected future operations - Under Current OPF** → then **Projected Operation Under Weather Risk Aware OPF**.  
+        3. Run **Projected Operation - Under Current OPF** → then **Projected Operation Under Weather Risk Aware OPF**.  
         4. Explore comparative plots in **Data Analytics**.  
 
         *(You can re‑run any page; session‑state keeps everything consistent.)*
 
         ---
 
-        ### Data Sources & Methodology
-        * ERA‑5 / ERA‑5‑Land reanalysis & NOAA GFS forecasts  
-        * IEEE test‑case‑style network parameters  
-        * Cost curves approximated in PKR (can be edited in the spreadsheet)  
+        ### Data Sources 
 
-        For details, please refer to the thesis PDF or the code comments.
+        This tool has utilized Google Earth Engine (GEE) which is a cloud-based platform designed for large scale analysis of geospatial data. Its three data sets have been utilized in this tool
+        
+        * ERA‑5 The following dataset is utilized for historic weather analysis [Link](https://developers.google.com/earth-engine/datasets/catalog/ECMWF_ERA5_DAILY)
+        
+        * ERA 5 Land reanalysis: The following dataset is utilized for historic weather analysis [Link](https://developers.google.com/earth-engine/datasets/catalog/ECMWF_ERA5_MONTHLY)
+
+        * NOAA GFS forecasts: The following dataset is utilized to get hourly weather forecast [Link](https://developers.google.com/earth-engine/datasets/catalog/NOAA_GFS0P25)
 
         ---
 
@@ -2822,7 +2859,11 @@ elif selection == "About the App and Developers":
         * **Syed Muhammad Ammar Ali Jaffri** – BSc Electrical Engineering, Habib University  
           * ✉️ ammarjaffri6515@gmail.com&nbsp;&nbsp;|&nbsp;&nbsp;[LinkedIn](https://www.linkedin.com/in/ammarjaffri/) 
 
-        _We welcome feedback, pull‑requests and collaboration enquiries._
+        ### Faculty Supervisor  
+        * **Muhammad Umer Tariq** – Assistant Professor, Electrical and Computer Engineering at Habib University  
+          * ✉️ umer.tariq@sse.habib.edu.pk  
+
+        _We welcome feedback, and collaboration enquiries._
         """,
         unsafe_allow_html=True
     )
