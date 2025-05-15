@@ -2594,7 +2594,8 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
         # ─────────────────────────────────────────────────────────────────────────
 
         with st.spinner("Running weather-aware OPF …"):
-            day_end_df, hourly_cost_df = weather_opf(line_outages)
+            # day_end_df, hourly_cost_df = weather_opf(line_outages)
+            (*_, day_end_df, hourly_cost_df) = weather_opf(line_outages)
 
         st.session_state.wa_ready          = True
         st.session_state.wa_day_end_df     = day_end_df
