@@ -2048,31 +2048,56 @@ elif selection == "Projected Operation - Under Current OPF":
             folium.Circle((lat, lon), radius=20000,
                           color=col, fill_color=col, fill_opacity=0.5).add_to(m)
 
-        # legend + title  (same HTML you used)
-        legend_html = """<style>.legend-entry{display:flex;align-items:center;margin-bottom:4px;}
-        .legend-swatch{width:12px;height:12px;margin-right:6px;display:inline-block;}
-        .circle{border-radius:70%;}</style>
-        <div style="background:#fff;padding:8px;border:1px solid #ccc;">
-        <strong>Line Load Level (% of Max) & Load Status</strong>
-        <div class='legend-entry'><span class='legend-swatch' style='background:#00FF00'></span>Below 75%</div>
-        <div class='legend-entry'><span class='legend-swatch' style='background:#FFFF00'></span>75–90%</div>
-        <div class='legend-entry'><span class='legend-swatch' style='background:#FFA500'></span>90–100%</div>
-        <div class='legend-entry'><span class='legend-swatch' style='background:#FF0000'></span>Overloaded &gt;100%</div>
-        <div class='legend-entry'><span class='legend-swatch' style='background:#000000'></span>Weather-Impacted</div>
-        <div class='legend-entry'><span class='legend-swatch circle' style='background:#008000'></span>Fully Served</div>
-        <div class='legend-entry'><span class='legend-swatch circle' style='background:#FF0000'></span>Not Fully Served</div>
-        </div>"""
+         # ---------- legend (replace the whole legend_html string) ------------------
+        legend_html = """
+        <style>
+          .legend-box,* .legend-box { color:#000 !important; }
+        </style>
+        
+        <div class="legend-box leaflet-control leaflet-bar"
+             style="position:absolute; top:150px; left:10px; z-index:9999;
+                    background:#ffffff; padding:8px; border:1px solid #ccc;
+                    font-size:14px; max-width:210px;">
+          <strong>Line Load Level&nbsp;(&#37; of Max)</strong><br>
+          <span style='display:inline-block;width:12px;height:12px;background:#00FF00;'></span>&nbsp;Below&nbsp;75&nbsp;%<br>
+          <span style='display:inline-block;width:12px;height:12px;background:#FFFF00;'></span>&nbsp;75–90&nbsp;%<br>
+          <span style='display:inline-block;width:12px;height:12px;background:#FFA500;'></span>&nbsp;90–100&nbsp;%<br>
+          <span style='display:inline-block;width:12px;height:12px;background:#FF0000;'></span>&nbsp;Overloaded&nbsp;>&nbsp;100&nbsp;%<br>
+          <span style='display:inline-block;width:12px;height:12px;background:#000000;'></span>&nbsp;Weather‑Impacted<br><br>
+        
+          <strong>Load Status</strong><br>
+          <span style='display:inline-block;width:12px;height:12px;background:#008000;border-radius:50%;'></span>&nbsp;Fully Served<br>
+          <span style='display:inline-block;width:12px;height:12px;background:#FF0000;border-radius:50%;'></span>&nbsp;Not Fully Served
+        </div>
+        """
         m.get_root().html.add_child(folium.Element(legend_html))
 
+        # ---------------- title (overwrite your title_html string) -----------------
         title_html = f"""
-        <div style='font-size:18px;font-weight:bold;background:rgba(255,255,255,0.8);padding:4px;'>
-        Projected Operation – Current OPF · Hour {hr}</div>"""
+        <style>
+          .map-title {{ color:#000 !important; }}
+        </style>
+        
+        <div class="map-title leaflet-control leaflet-bar"
+             style="position:absolute; top:90px; left:10px; z-index:9999;
+                    background:rgba(255,255,255,0.9); padding:4px;
+                    font-size:18px; font-weight:bold;">
+          Projected Operation - Under Current OPF – Hour {hour_idx}
+        </div>
+        """
         m.get_root().html.add_child(folium.Element(title_html))
 
         folium.LayerControl(collapsed=False).add_to(m)
 
-        st.write(f"### Network Loading Visualization – Hour {hr}")
-        st_folium(m, width=800, height=600, key=f"bau_map_{hr}")
+        # display
+        st.write(f"### Network Loading Visualization – Hour {hour_idx}")
+        st_folium(m, width=800, height=600, key=f"bau_map_{hour_idx}")
+
+        
+        # folium.LayerControl(collapsed=False).add_to(m)
+
+        # st.write(f"### Network Loading Visualization – Hour {hr}")
+        # st_folium(m, width=800, height=600, key=f"bau_map_{hr}")
 # ────────────────────────────────────────────────────────────────────────────
 # Page 4 :  Weather‑Aware System
 # ────────────────────────────────────────────────────────────────────────────
