@@ -1907,10 +1907,10 @@ elif selection == "Projected Operation - Under Current OPF":
         
         # maximum loading limits (used for the colour scale)
         st.session_state.max_loading_capacity = _df_lines["max_loading_percent"].max()
-        if _df_trafo:
-            st.session_state.max_loading_capacity_transformer = (
-                _df_trafo["max_loading_percent"].max()
-            )
+        if _df_trafo is not None and not _df_trafo.empty:
+        st.session_state.max_loading_capacity_transformer = (
+            _df_trafo["max_loading_percent"].max()
+        )
         
         # --------------------------------------------------------------------
         # 2)  UI – pick hour & render
