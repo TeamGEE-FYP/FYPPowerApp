@@ -1257,9 +1257,9 @@ elif selection == "Weather Risk Visualisation Using Google Earth Engine":
                             from_bus = df.loc[line_id, "from_bus"]
                             to_bus = df.loc[line_id, "to_bus"]
                             daily_results.append((int(from_bus), int(to_bus), int(max_risk)))
-                            # risk_scores.append(int(max_risk))  # Add this line to collect risk scores
-                            if max_risk >= risk_score_threshold:
-                                risk_scores.append(int(max_risk))
+                            risk_scores.append(int(max_risk))  # Add this line to collect risk scores
+                            # if max_risk >= risk_score_threshold:
+                            #     risk_scores.append(int(max_risk))
                             
                     
                             data.append({
