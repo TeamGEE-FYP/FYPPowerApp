@@ -614,7 +614,9 @@ def generate_line_outages(outage_hours, line_down, risk_scores,
 
     # ── 1  clean & align the risk-score list ───────────────────────────────
     needed = len(line_down)
-    cleaned = []
+    # keep only the numeric entries (positions 0,2,4,…) and take the first
+    # *needed* of them.  This restores the Colab behaviour.
+    cleaned  = [r for r in risk_scores if isinstance(r, (int, float))][:needed]
 
     for r in risk_scores:
         # convert dict → its numeric score
