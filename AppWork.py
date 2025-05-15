@@ -2090,8 +2090,8 @@ elif selection == "Projected Operation - Under Current OPF":
         folium.LayerControl(collapsed=False).add_to(m)
 
         # display
-        st.write(f"### Network Loading Visualization – Hour {hour_idx}")
-        st_folium(m, width=800, height=600, key=f"bau_map_{hour_idx}")
+        st.write(f"### Network Loading Visualization – Hour {hr}")
+        st_folium(m, width=800, height=600, key=f"bau_map_{hr}")
 
         
         # folium.LayerControl(collapsed=False).add_to(m)
