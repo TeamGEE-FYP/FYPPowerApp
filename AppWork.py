@@ -1975,10 +1975,21 @@ elif selection == "Projected Operation - Under Current OPF":
             "trafo_idx_map":                    _trafo_idx_map,
             "max_loading_capacity":             _df_lines["max_loading_percent"].max(),
         })
-        if _df_trafo is not None and not _df_trafo.empty:
+        # if _df_trafo is not None and not _df_trafo.empty:
+        #     st.session_state.max_loading_capacity_transformer = (
+        #         _df_trafo["max_loading_percent"].max()
+        #     )
+
+        if isinstance(_df_trafo, pd.DataFrame) and not _df_trafo.empty:
             st.session_state.max_loading_capacity_transformer = (
                 _df_trafo["max_loading_percent"].max()
             )
+        else:      # no transformers → fall back to the line limit
+            st.session_state.max_loading_capacity_transformer = (
+                st.session_state.max_loading_capacity
+            )
+
+    
         # -----------------------------------------------------------------
     
         # st.subheader("Day-End Summary")
