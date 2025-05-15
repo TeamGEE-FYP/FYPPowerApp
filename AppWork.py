@@ -1922,10 +1922,10 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
                 pp.runpp(net)
             except Exception:
                 # network unsolvable even before optimisation
-                loading_percent_wa.append([None]* (len(net.line)+len(net.trafo or [])))
-                serving_per_hour.append([None]*len(net.load))
-                gen_per_hour.append([None]*len(net.res_gen))
-                slack_per_hour.append(None)
+                # loading_percent_wa.append([None]* (len(net.line)+len(net.trafo or [])))
+                # serving_per_hour.append([None]*len(net.load))
+                # gen_per_hour.append([None]*len(net.res_gen))
+                # slack_per_hour.append(None)
                 continue
 
             # helper to push line+trafo loading list -------------------------
