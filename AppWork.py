@@ -579,32 +579,76 @@ path = st.session_state.get("uploaded_file")   # BytesIO object
 # ------------------------------------------------------------------
 # generate_line_outages  – identical logic, NO print statements
 # ------------------------------------------------------------------
+# def generate_line_outages(outage_hours, line_down, risk_scores,
+#                           capped_contingency_mode=False):
+#     if not outage_hours or not line_down or not risk_scores:
+#         return []
+
+#     sheet_name = "Line Parameters"
+#     df_line = pd.read_excel(path, sheet_name=sheet_name)
+#     no_of_lines_in_network = len(df_line) - 1
+#     capped_limit = math.floor(0.2 * no_of_lines_in_network)
+
+#     # Combine line, outage_hour, and risk into tuples
+#     combined = [
+#         (line[0], line[1], hour, risk)
+#         for line, hour, risk in zip(line_down, outage_hours, risk_scores)
+#     ]
+
+#     # Sort by risk score in descending order
+#     sorted_combined = sorted(combined, key=lambda x: x[-1], reverse=True)
+
+#     # Extract only (from_bus, to_bus, outage_hour)
+#     line_outages = [(line[0], line[1], line[2]) for line in sorted_combined]
+
+#     if capped_contingency_mode and len(line_outages) > capped_limit:
+#         line_outages = line_outages[:capped_limit]
+
+#     return line_outages
+
 def generate_line_outages(outage_hours, line_down, risk_scores,
                           capped_contingency_mode=False):
+
     if not outage_hours or not line_down or not risk_scores:
         return []
 
-    sheet_name = "Line Parameters"
-    df_line = pd.read_excel(path, sheet_name=sheet_name)
-    no_of_lines_in_network = len(df_line) - 1
-    capped_limit = math.floor(0.2 * no_of_lines_in_network)
+    # ── 1  clean & align the risk-score list ───────────────────────────────
+    needed = len(line_down)
+    cleaned = []
 
-    # Combine line, outage_hour, and risk into tuples
+    for r in risk_scores:
+        # convert dict → its numeric score
+        if isinstance(r, dict):
+            r = r.get("risk_score", 0)
+
+        # accept only numeric values
+        if isinstance(r, (int, float)):
+            cleaned.append(r)
+
+        if len(cleaned) == needed:      # stop when we have enough
+            break
+
+    # if still short, pad with zeros (shouldn't normally happen)
+    cleaned += [0] * (needed - len(cleaned))
+    # ----------------------------------------------------------------------
+
+    # ── 2  build the tuples (from_bus, to_bus, hour, score) ────────────────
     combined = [
-        (line[0], line[1], hour, risk)
-        for line, hour, risk in zip(line_down, outage_hours, risk_scores)
+        (line[0], line[1], hour, score)
+        for line, hour, score in zip(line_down, outage_hours, cleaned)
     ]
 
-    # Sort by risk score in descending order
-    sorted_combined = sorted(combined, key=lambda x: x[-1], reverse=True)
+    # ── 3  sort by risk, apply contingency cap, return (fbus, tbus, hour) ──
+    combined.sort(key=lambda x: x[-1], reverse=True)
 
-    # Extract only (from_bus, to_bus, outage_hour)
-    line_outages = [(line[0], line[1], line[2]) for line in sorted_combined]
+    sheet_name = "Line Parameters"
+    df_line = pd.read_excel(path, sheet_name=sheet_name)
+    capped_limit = math.floor(0.2 * (len(df_line) - 1))
 
-    if capped_contingency_mode and len(line_outages) > capped_limit:
-        line_outages = line_outages[:capped_limit]
+    if capped_contingency_mode and len(combined) > capped_limit:
+        combined = combined[:capped_limit]
 
-    return line_outages
+    return [(f, t, hr) for f, t, hr, _ in combined]
 
 
 
