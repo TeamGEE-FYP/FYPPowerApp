@@ -2433,7 +2433,7 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
                     while (
                         ((overloaded_lines(net) != [])
                         or (overloaded_transformer(net) != [])
-                    ) and (all_loads_zero_flag = False)):
+                    ) and (all_loads_zero_flag == False)):
         
                         for crit in sorted(
                             net.load["criticality"].dropna().unique(), reverse=True
