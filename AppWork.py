@@ -552,8 +552,10 @@ def overloaded_transformer(net, xls_file, line_outages):
         return overloaded
 
     loadings   = transform_loading(net.res_trafo["loading_percent"])
-    real_check = all_real_numbers(net.res_trafo["loading_percent"].tolist(),
-                                  line_outages)
+    # real_check = all_real_numbers(net.res_trafo["loading_percent"].tolist(),
+    #                               line_outages)
+    real_check = all_real_numbers(net.res_trafo["loading_percent"].tolist())
+
 
     for idx, (_, loading_val) in enumerate(zip(net.res_trafo.itertuples(),
                                                loadings)):
