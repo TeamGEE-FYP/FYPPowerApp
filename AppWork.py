@@ -645,8 +645,9 @@ def generate_line_outages(outage_hours, line_down, risk_scores,
     df_line = pd.read_excel(path, sheet_name=sheet_name)
     capped_limit = math.floor(0.2 * (len(df_line) - 1))
 
-    if capped_contingency_mode and len(combined) > capped_limit:
-        combined = combined[:capped_limit]
+    if capped_contingency_mode:
+        if len(combined) > capped_limit:
+            combined = combined[:capped_limit]
 
     return [(f, t, hr) for f, t, hr, _ in combined]
 
