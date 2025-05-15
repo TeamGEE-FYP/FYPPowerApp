@@ -95,8 +95,7 @@ folium.Map.add_ee_layer = add_ee_layer
 
 # ---------------------------------------------------------------------
 # 1) Network INITIALISE  (was `Network_initialize` in Colab)
-# ---------------------------------------------------------------------
-@st.cache_data(show_spinner=False, suppress_st_warning=True)
+# ----------------------------------------------------------
 def network_initialize(xls_file):
     """
     Re-creates a fresh pandapower network from the uploaded Excel *every* time
