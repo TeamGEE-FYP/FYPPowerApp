@@ -2216,6 +2216,8 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
             # -----------------------------------------
             # 2. Initialization & data load
             # -----------------------------------------
+            path = st.session_state.get("uploaded_file")      # BytesIO object
+            xls  = pd.ExcelFile(path)                         # gives .sheet_names
             df_trafo = []
             if "Transformer Parameters" in xls.sheet_names:
                 (net, df_bus, df_slack, df_line, num_hours,
