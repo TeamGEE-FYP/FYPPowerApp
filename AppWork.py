@@ -2601,25 +2601,25 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
         st.session_state.wa_day_end_df     = day_end_df
         st.session_state.wa_hourly_cost_df = hourly_cost_df
 
-        if st.session_state.wa_ready:
-            st.subheader("Day-End Summary (Weather-Aware OPF)")
-            st.dataframe(st.session_state.wa_day_end_df, use_container_width=True)
+        # if st.session_state.wa_ready:
+        #     st.subheader("Day-End Summary (Weather-Aware OPF)")
+        #     st.dataframe(st.session_state.wa_day_end_df, use_container_width=True)
         
-            st.subheader("Hourly Generation Cost (Weather-Aware OPF)")
-            st.dataframe(st.session_state.wa_hourly_cost_df, use_container_width=True)
+        #     st.subheader("Hourly Generation Cost (Weather-Aware OPF)")
+        #     st.dataframe(st.session_state.wa_hourly_cost_df, use_container_width=True)
 
 
-        if st.session_state.get("wa_ready", False):
-        
-            st.subheader("Day-End Summary (Weather-Aware OPF)")
-            st.dataframe(
-                st.session_state.wa_day_end_df, use_container_width=True
-            )
-        
-            st.subheader("Hourly Generation Cost (Weather-Aware OPF)")
-            st.dataframe(
-                st.session_state.wa_hourly_cost_df, use_container_width=True
-            )
+    if st.session_state.get("wa_ready", False):
+    
+        st.subheader("Day-End Summary (Weather-Aware OPF)")
+        st.dataframe(
+            st.session_state.wa_day_end_df, use_container_width=True
+        )
+    
+        st.subheader("Hourly Generation Cost (Weather-Aware OPF)")
+        st.dataframe(
+            st.session_state.wa_hourly_cost_df, use_container_width=True
+        )
 
 
 
