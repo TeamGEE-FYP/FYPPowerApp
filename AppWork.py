@@ -2582,12 +2582,12 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
                 {
                     "hour": list(range(num_hours)),
                     "Weather-Aware OPF Cost (PKR)":   weather_aware_cost,
-                    "Current OPF Cost (PKR)":         business_as_usuall_cost,
+                    "Current OPF Generation Cost (PKR)":         business_as_usuall_cost,
                 }
             )
             hourly_cost_df["Δ Cost (WA – Current OPF)"] = (
                 hourly_cost_df["Weather-Aware OPF Cost (PKR)"]
-                - hourly_cost_df["Current OPF Cost (PKR)"]
+                - hourly_cost_df["Current OPF Generation Cost (PKR)"]
             )
         
             return (
