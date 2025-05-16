@@ -3119,7 +3119,7 @@ elif selection == "Data Analytics":
                 borderwidth=0,
             ),
             margin=dict(l=60, r=220, t=80, b=50),  # extra space for the legend
-            width=1000,                             # (optional) give the plot
+            # width=1000,                             # (optional) give the plot
 
         )
     
