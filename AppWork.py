@@ -1974,6 +1974,7 @@ elif selection == "Projected Operation - Under Current OPF":
                 "shedding_buses":      _shed_buses,
             },
             "hourly_shed_bau":     _shed,   
+            "served_load_per_hour_bau": _served,
             "line_idx_map":                     _line_idx_map,
             "trafo_idx_map":                    _trafo_idx_map,
             "max_loading_capacity":             _df_lines["max_loading_percent"].max(),
@@ -2665,6 +2666,7 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
                 "shedding_buses":     shedding_buses,
             },
             "hourly_shed_weather": _hourly_shed_wa,  
+            "served_load_per_hour_wa": _served_load_wa,
             "wa_line_idx_map":                 line_idx_map,
             "wa_trafo_idx_map":                trafo_idx_map,
             "wa_max_loading_capacity":         df_lines["max_loading_percent"].max(),
@@ -2886,6 +2888,10 @@ elif selection == "Data Analytics":
         st.stop()
 
     # --- pull the cached series we need -----------------------------------
+    df_load_profile       = st.session_state.network_data["df_load_profile"]
+    df_load_params        = st.session_state.network_data["df_load"]
+    served_bau            = st.session_state.served_load_per_hour_bau
+    served_wa             = st.session_state.served_load_per_hour_wa
     loading_percent_bau = st.session_state.bau_results["loading_percent_bau"]
     loading_percent_wa  = st.session_state.wa_results["loading_percent_wa"]
     df_line             = st.session_state.network_data["df_line"].copy()
@@ -3125,6 +3131,38 @@ elif selection == "Data Analytics":
         )
         return fig_bau, fig_wa
 
+    def make_load_served_fig(bus_id: int,
+                         df_load_profile: pd.DataFrame,
+                         served_bau: list[list[float]],
+                         served_wa:  list[list[float]]):
+ 
+        hrs   = list(range(len(served_bau)))
+        col   = f"p_mw_bus_{bus_id}"
+        demand = df_load_profile[col].tolist()
+        bus_id_idx = df_load_params["bus"].tolist().index(bus_id)
+        srv_bau = [h[bus_id_idx] for h in served_bau]
+        srv_wa  = [h[bus_id_idx] for h in served_wa]
+    
+        fig = go.Figure()
+        fig.add_bar(x=hrs, y=demand,  name="Load Demand",
+                    marker=dict(color="rgba(99,110,250,0.8)"))
+        fig.add_bar(x=hrs, y=srv_bau, name="Current OPF Served",
+                    marker=dict(color="rgba(239,85,59,0.8)"))
+        fig.add_bar(x=hrs, y=srv_wa,  name="Weather-Aware Served",
+                    marker=dict(color="rgba(0,204,150,0.8)"))
+    
+        fig.update_layout(
+            title=f"Hourly Load-Served Comparison – Bus {bus_id}",
+            xaxis=dict(title="Hour", tickmode="linear", dtick=1),
+            yaxis_title="Load [MWh]",
+            barmode="group",
+            template="plotly_dark",
+            width=1200, height=600,
+            margin=dict(l=40, r=40, t=60, b=40),
+        )
+        return fig
+
+
 
     # ── Buttons – vertical stack ------------------------------------------
     if st.button("Hourly Load-Shedding Comparison"):
@@ -3170,6 +3208,22 @@ elif selection == "Data Analytics":
         st.plotly_chart(fig_wa,  use_container_width=True)
     
     st.markdown("---")
+
+    # ── Load-Served comparison -------------------------------------------------
+    bus_options = df_load_params["bus"].astype(int).tolist()
+    chosen_bus  = st.selectbox("Select Load-Bus", bus_options, key="ls_bus")
+    
+    if st.button("Show Load-Served Comparison"):
+        fig = make_load_served_fig(
+            bus_id            = chosen_bus,
+            df_load_profile   = df_load_profile,
+            served_bau        = served_bau,
+            served_wa         = served_wa,
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    st.markdown("---")
+
 
     
 
