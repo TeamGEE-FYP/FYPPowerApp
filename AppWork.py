@@ -2563,11 +2563,24 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
                 )
             day_end_df = pd.DataFrame(day_end_rows)
         
+            # hourly_cost_df = pd.DataFrame(
+            #     {
+            #         "hour": list(range(num_hours)),
+            #         "generation_cost (PKR)": weather_aware_cost,
+            #     }
+            # )
+
+            # --- NEW: add Current-OPF cost & the difference ------------------------------
             hourly_cost_df = pd.DataFrame(
                 {
                     "hour": list(range(num_hours)),
-                    "generation_cost (PKR)": weather_aware_cost,
+                    "Weather-Aware OPF Cost (PKR)":   weather_aware_cost,
+                    "Current OPF Cost (PKR)":         business_as_usuall_cost,
                 }
+            )
+            hourly_cost_df["Δ Cost (WA – Current OPF)"] = (
+                hourly_cost_df["Weather-Aware OPF Cost (PKR)"]
+                - hourly_cost_df["Current OPF Cost (PKR)"]
             )
         
             return (
