@@ -3058,11 +3058,7 @@ elif selection == "Data Analytics":
                            loading_bau,
                            loading_wa,
                            df_line):
-    """
-    Build two Plotly figures:
-      • solid lines  → Current-OPF loading
-      • dashed lines → Weather-Aware loading
-    """
+    
         # ▸ convert to NumPy   [time  ×  lines&trafos]
         bau = np.array(loading_bau)
         wa  = np.array(loading_wa)
