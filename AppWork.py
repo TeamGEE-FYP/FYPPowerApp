@@ -1975,6 +1975,7 @@ elif selection == "Projected Operation - Under Current OPF":
             },
             "hourly_shed_bau":     _shed,   
             "served_load_per_hour_bau": _served,
+            "slack_per_hour_bau":        _slack,   
             "line_idx_map":                     _line_idx_map,
             "trafo_idx_map":                    _trafo_idx_map,
             "max_loading_capacity":             _df_lines["max_loading_percent"].max(),
@@ -2667,6 +2668,8 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
             },
             "hourly_shed_weather": _hourly_shed_wa,  
             "served_load_per_hour_wa": _served_load_wa,
+            "slack_per_hour_wa":         _slack_per_hour_wa,     # ← NEW
+            "planned_slack_per_hour":    _planned_slack_per_hour # ← NEW
             "wa_line_idx_map":                 line_idx_map,
             "wa_trafo_idx_map":                trafo_idx_map,
             "wa_max_loading_capacity":         df_lines["max_loading_percent"].max(),
@@ -2888,6 +2891,9 @@ elif selection == "Data Analytics":
         st.stop()
 
     # --- pull the cached series we need -----------------------------------
+    planned_slack = st.session_state.planned_slack_per_hour
+    slack_bau      = st.session_state.slack_per_hour_bau
+    slack_wa       = st.session_state.slack_per_hour_wa
     df_load_profile       = st.session_state.network_data["df_load_profile"]
     df_load_params        = st.session_state.network_data["df_load"]
     served_bau            = st.session_state.served_load_per_hour_bau
@@ -3161,7 +3167,38 @@ elif selection == "Data Analytics":
             margin=dict(l=40, r=40, t=60, b=40),
         )
         return fig
-
+    def make_slack_dispatch_fig(planned: list[float],
+                                slack_bau: list[float],
+                                slack_wa:  list[float]) -> go.Figure:
+       
+        hrs = list(range(len(planned)))
+    
+        # replace None with 0 to avoid gaps
+        planned   = [p or 0 for p in planned]
+        slack_bau = [s or 0 for s in slack_bau]
+        slack_wa  = [s or 0 for s in slack_wa]
+    
+        fig = go.Figure()
+        fig.add_bar(x=hrs, y=planned,   name="Planned Dispatch",
+                    marker_color="rgba(99,110,250,0.8)")
+        fig.add_bar(x=hrs, y=slack_bau, name="Current OPF",
+                    marker_color="rgba(239,85,59,0.8)")
+        fig.add_bar(x=hrs, y=slack_wa,  name="Weather-Aware OPF",
+                    marker_color="rgba(0,204,150,0.8)")
+    
+        fig.update_layout(
+            title="Hourly Slack-Generator Dispatch Comparison",
+            xaxis=dict(title="Hour", tickmode="linear", dtick=1,
+                       range=[0, max(hrs)]),
+            yaxis_title="Generation [MWh]",
+            barmode="group",
+            template="plotly_dark",
+            legend_title="Scenario",
+            width=1200, height=600,
+            margin=dict(l=50, r=50, t=70, b=40),
+        )
+        return fig
+    
 
 
     # ── Buttons – vertical stack ------------------------------------------
@@ -3223,6 +3260,17 @@ elif selection == "Data Analytics":
         st.plotly_chart(fig, use_container_width=True)
     
     st.markdown("---")
+
+    if st.button("Slack Generator Dispatch Comparison"):
+        fig = make_slack_dispatch_fig(
+            planned    = planned_slack,
+            slack_bau  = slack_bau,
+            slack_wa   = slack_wa,
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    st.markdown("---")
+
 
 
     
