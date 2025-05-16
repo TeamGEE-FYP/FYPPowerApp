@@ -3161,7 +3161,7 @@ elif selection == "Data Analytics":
                 borderwidth=0,
             ),
             margin=dict(l=60, r=220, t=80, b=50),
-            width=1=00,              # keep or remove as you prefer
+            width=1000,              # keep or remove as you prefer
             height=500,
         )
         return fig_bau, fig_wa
