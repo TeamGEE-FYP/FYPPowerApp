@@ -2241,7 +2241,7 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
                     )
             else:
                 # fallback: plain, no-outage cost
-                business_as_usuall_cost = calculating_hourly_cost(path)
+                st.write("Run page 2 first)
             # —— helper so existing single-arg calls still work ——
             def overloaded_transformer_local(net_):
                 return overloaded_transformer(net_, path, line_outages)
