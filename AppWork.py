@@ -3484,11 +3484,11 @@ elif selection == "Data Analytics":
     
     st.markdown("---")
 
-# ────────────────────────────────────────────────────────────
-#  (NEW) Render everything the user has asked for so far
-# ────────────────────────────────────────────────────────────
-for fig in st.session_state.da_figs:
-    st.plotly_chart(fig, use_container_width=True)
+    # ────────────────────────────────────────────────────────────
+    #  (NEW) Render everything the user has asked for so far
+    # ────────────────────────────────────────────────────────────
+    for fig in st.session_state.da_figs:
+        st.plotly_chart(fig, use_container_width=True)
 
 
     
