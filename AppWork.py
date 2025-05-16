@@ -2176,6 +2176,12 @@ elif selection == "Projected Operation - Under Current OPF":
 # ─────────────────────────────────────────────────────────────────────────────
 elif selection == "Projected Operation - Under Weather Risk Aware OPF":
     st.title("Projected Operation – Under Weather-Risk-Aware OPF")
+     # 🚦 NEW – make sure the cache from Page 3 exists
+    if not st.session_state.get("bau_ready", False):
+        st.info(
+            "Please run **Projected Operation – Under Current OPF** first.  "
+            "When it finishes you can return here and run the Weather-Aware analysis."
+        )
 
     # ── 0 · SESSION  STATE  SLOTS  (create once) ────────────────────────────
     for k, v in (
@@ -2235,13 +2241,14 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
             # -----------------------------------------
             path = st.session_state.get("uploaded_file")      # BytesIO object
             xls  = pd.ExcelFile(path)                         # gives .sheet_names
-            if st.session_state.get("bau_hourly_cost_df") is not None:
-                business_as_usuall_cost = (
-                        st.session_state.bau_hourly_cost_df["Current OPF Generation Cost (PKR)"].tolist()
-                    )
-            else:
-                # fallback: plain, no-outage cost
-                st.write("Run page 2 first)
+            # ==== NEW – baseline cost frozen by Page 3 =========================
+            business_as_usuall_cost = (
+                st.session_state.bau_hourly_cost_df
+                ["Current OPF Generation Cost (PKR)"]
+                .tolist()
+            )
+            # make a working copy we can edit freely
+            weather_aware_cost = business_as_usuall_cost.copy()
             # —— helper so existing single-arg calls still work ——
             def overloaded_transformer_local(net_):
                 return overloaded_transformer(net_, path, line_outages)
@@ -2258,7 +2265,7 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
                  df_load_profile, df_gen_profile) = Network_initialize()
         
             # BAU and weather-aware cost arrays
-            business_as_usuall_cost = calculating_hourly_cost(path)
+            # business_as_usuall_cost = calculating_hourly_cost(path)
             weather_aware_cost      = business_as_usuall_cost.copy()
         
             # Build GeoDataFrame of lines
