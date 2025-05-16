@@ -2914,7 +2914,7 @@ elif selection == "Data Analytics":
         )
 
     # --------------------------------------------------------------
-    if data_ready and "analytics_data_prepared" not in st.session_state::
+    if data_ready and "analytics_data_prepared" not in st.session_state:
        
         # --- pull the cached series we need -----------------------------------
         planned_slack = st.session_state.planned_slack_per_hour
