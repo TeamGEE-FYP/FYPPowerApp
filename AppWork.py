@@ -2985,6 +2985,71 @@ elif selection == "Data Analytics":
             margin=dict(l=60, r=40, t=60, b=50),
         )
         return fig
+        
+    def make_lost_savings_fig(hours,
+                          cost_bau,
+                          cost_weather,
+                          shed_bau,
+                          shed_wa):
+        # -- convert everything to the units the Colab code expects -------------
+        cost_bau_m  = [x / 1e6 for x in cost_bau]
+        cost_wa_m   = [x / 1e6 for x in cost_weather]
+    
+        lost_savings = [
+            wa - bau if wa > bau else 0
+            for wa, bau in zip(cost_wa_m, cost_bau_m)
+        ]
+    
+        # shed arrays come in MWh already; turn any None into 0
+        shed_bau = [float(x) if x is not None else 0.0 for x in shed_bau]
+        shed_wa  = [float(x) if x is not None else 0.0 for x in shed_wa]
+    
+        # PKR 45 000 per MWh  →  /1e6 gives “millions PKR”
+        lost_revenue = [
+            (bau_ld - wa_ld) * (45_000 / 1e6)
+            for bau_ld, wa_ld in zip(shed_bau, shed_wa)
+        ]
+    
+        # ----------------------------- Plotly figure --------------------------
+        fig = go.Figure()
+    
+        fig.add_trace(
+            go.Scatter(
+                x=hours,
+                y=lost_savings,
+                fill="tozeroy",
+                mode="none",
+                name="Difference in Generation Cost",
+                fillcolor="rgba(255,99,71,0.6)",     # soft red
+                hovertemplate="Hour %{x}: %{y:.2f} M PKR<extra></extra>",
+            )
+        )
+    
+        fig.add_trace(
+            go.Scatter(
+                x=hours,
+                y=lost_revenue,
+                fill="tozeroy",
+                mode="none",
+                name="Potential Loss of Revenue",
+                fillcolor="rgba(0,0,255,0.4)",       # soft blue
+                hovertemplate="Hour %{x}: %{y:.2f} M PKR<extra></extra>",
+            )
+        )
+    
+        fig.update_layout(
+            title="Potential Revenue Loss from Current OPF",
+            xaxis_title="Time [hours]",
+            yaxis_title="Lost Revenue [millions PKR]",
+            xaxis=dict(tickmode="linear", dtick=1, range=[0, max(hours)]),
+            template="plotly_dark",
+            width=1000,
+            height=500,
+            legend=dict(x=0.01, y=0.99),
+            margin=dict(l=60, r=40, t=60, b=50),
+        )
+        return fig
+
 
     # ── Buttons – vertical stack ------------------------------------------
     if st.button("Hourly Load-Shedding Comparison"):
@@ -2999,6 +3064,21 @@ elif selection == "Data Analytics":
     if st.button("Difference in Generation Cost"):
         fig_cost = make_cost_diff_fig(hours, cost_bau, cost_weather)
         st.plotly_chart(fig_cost, use_container_width=True)
+
+    st.markdown("---")
+    # ── Potential Revenue-Loss plot ------------------------------------------
+    if st.button("Potential Revenue Loss From Current OPF"):
+        fig_loss = make_lost_savings_fig(
+            hours,
+            cost_bau,
+            cost_weather,
+            hourly_shed_bau,
+            hourly_shed_weather,
+        )
+        st.plotly_chart(fig_loss, use_container_width=True)
+    
+    st.markdown("---")
+    
 
 
    
