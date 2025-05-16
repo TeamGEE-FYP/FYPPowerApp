@@ -127,6 +127,8 @@ def network_initialize(xls_file):
     df_load  = pd.read_excel(xls_file, sheet_name="Load Parameters",     index_col=0)
     df_slack = pd.read_excel(xls_file, sheet_name="Generator Parameters",index_col=0)
     df_line  = pd.read_excel(xls_file, sheet_name="Line Parameters",     index_col=0)
+    # df_gen_params = pd.read_excel(xls_file, sheet_name="Generator Parameters")
+
 
     # --- 2. Build static elements -------------------------------------------------
     for _, row in df_bus.iterrows():
@@ -913,6 +915,7 @@ if selection == "Network Initialization":
             'df_line': df_line,
             'df_load_profile': df_load_profile,
             'df_gen_profile': df_gen_profile,
+            # 'df_gen_params':   df_gen_params,      #  ← NEW
             'df_trafo': df_trafo  # Add transformer data to session state
         }
 
@@ -2894,6 +2897,16 @@ elif selection == "Data Analytics":
     planned_slack = st.session_state.planned_slack_per_hour
     slack_bau      = st.session_state.slack_per_hour_bau
     slack_wa       = st.session_state.slack_per_hour_wa
+    if "df_gen_params" not in st.session_state.network_data:
+        path = st.session_state.get("uploaded_file")
+        st.session_state.network_data["df_gen_params"] = pd.read_excel(
+            path, sheet_name="Generator Parameters"
+        )
+    if "df_gen_profile" not in st.session_state.network_data:
+        path = st.session_state.get("uploaded_file")
+        st.session_state.network_data["df_gen_profile"] = pd.read_excel(
+            path, sheet_name="Generator Profile"
+        )
     df_gen_params   = st.session_state.network_data["df_gen_params"]      # “Generator Parameters” sheet
     df_gen_profile  = st.session_state.network_data["df_gen_profile"]     # “Generator Profile”   sheet
     # ------------------------------------------------------------------
