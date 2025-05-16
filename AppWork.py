@@ -17,6 +17,7 @@ import math
 import traceback
 import plotly.graph_objects as go
 from shapely.geometry import LineString, Point
+import plotly.express as px
 
 # Set page configuration
 st.set_page_config(
@@ -2885,6 +2886,9 @@ elif selection == "Data Analytics":
         st.stop()
 
     # --- pull the cached series we need -----------------------------------
+    loading_percent_bau = st.session_state.bau_results["loading_percent_bau"]
+    loading_percent_wa  = st.session_state.wa_results["loading_percent_wa"]
+    df_line             = st.session_state.network_data["df_line"].copy()
     hours                = list(range(len(st.session_state.bau_hourly_cost_df)))
     hourly_shed_bau     = st.session_state.hourly_shed_bau
     hourly_shed_weather = st.session_state.hourly_shed_weather
@@ -3050,6 +3054,81 @@ elif selection == "Data Analytics":
         )
         return fig
 
+    def make_line_loading_figs(hours,
+                           loading_bau,
+                           loading_wa,
+                           df_line):
+    """
+    Build two Plotly figures:
+      • solid lines  → Current-OPF loading
+      • dashed lines → Weather-Aware loading
+    """
+        # ▸ convert to NumPy   [time  ×  lines&trafos]
+        bau = np.array(loading_bau)
+        wa  = np.array(loading_wa)
+    
+        # keep only the real transmission lines so legend lengths match
+        n_lines = len(df_line)
+        bau = bau[:, :n_lines]
+        wa  = wa[:, :n_lines]
+    
+        line_legends = [
+            f"Line {row['from_bus']}-{row['to_bus']}"
+            for _, row in df_line.iterrows()
+        ]
+    
+        colours = px.colors.qualitative.Plotly
+        colour_list = colours * (n_lines // len(colours) + 1)
+    
+        # ---------- Current-OPF figure (solid) -------------------------------
+        fig_bau = go.Figure()
+        for idx in range(n_lines):
+            fig_bau.add_trace(
+                go.Scatter(
+                    x=hours,
+                    y=bau[:, idx],
+                    mode="lines",
+                    line=dict(color=colour_list[idx], width=3, dash="solid"),
+                    name=line_legends[idx],
+                )
+            )
+        fig_bau.update_layout(
+            title="Projected Operation – Current OPF<br>Line Loading Over Time",
+            template="plotly_dark",
+            xaxis_title="Time [hours]",
+            yaxis_title="Line Loading [%]",
+            xaxis=dict(tickmode="linear", dtick=1, range=[0, max(hours)]),
+            width=1000,
+            height=500,
+            legend=dict(x=0.01, y=0.99),
+            margin=dict(l=60, r=40, t=80, b=50),
+        )
+    
+        # ---------- Weather-Aware figure (dashed) ----------------------------
+        fig_wa = go.Figure()
+        for idx in range(n_lines):
+            fig_wa.add_trace(
+                go.Scatter(
+                    x=hours,
+                    y=wa[:, idx],
+                    mode="lines",
+                    line=dict(color=colour_list[idx], width=3, dash="dash"),
+                    name=line_legends[idx],
+                )
+            )
+        fig_wa.update_layout(
+            title="Projected Operation – Weather-Aware OPF<br>Line Loading Over Time",
+            template="plotly_dark",
+            xaxis_title="Time [hours]",
+            yaxis_title="Line Loading [%]",
+            xaxis=dict(tickmode="linear", dtick=1, range=[0, max(hours)]),
+            width=1000,
+            height=500,
+            legend=dict(x=0.01, y=0.99),
+            margin=dict(l=60, r=40, t=80, b=50),
+        )
+        return fig_bau, fig_wa
+
 
     # ── Buttons – vertical stack ------------------------------------------
     if st.button("Hourly Load-Shedding Comparison"):
@@ -3078,6 +3157,24 @@ elif selection == "Data Analytics":
         st.plotly_chart(fig_loss, use_container_width=True)
     
     st.markdown("---")
+
+    # ── Line-Loading-over-Time comparison ------------------------------------
+    if st.button("Line Loading Over Time Comparison"):
+        fig_bau, fig_wa = make_line_loading_figs(
+            hours,
+            loading_percent_bau,
+            loading_percent_wa,
+            df_line,
+        )
+        # use tabs so both plots fit nicely
+        tab1, tab2 = st.tabs(["Current OPF", "Weather-Aware OPF"])
+        with tab1:
+            st.plotly_chart(fig_bau, use_container_width=True)
+        with tab2:
+            st.plotly_chart(fig_wa,  use_container_width=True)
+    
+    st.markdown("---")
+
     
 
 
