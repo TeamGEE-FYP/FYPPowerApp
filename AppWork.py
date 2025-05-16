@@ -3161,13 +3161,13 @@ elif selection == "Data Analytics":
             loading_percent_bau,
             loading_percent_wa,
             df_line,
-        )
-        # use tabs so both plots fit nicely
-        tab1, tab2 = st.tabs(["Current OPF", "Weather-Aware OPF"])
-        with tab1:
-            st.plotly_chart(fig_bau, use_container_width=True)
-        with tab2:
-            st.plotly_chart(fig_wa,  use_container_width=True)
+        # )
+        # # use tabs so both plots fit nicely
+        # tab1, tab2 = st.tabs(["Current OPF", "Weather-Aware OPF"])
+        # with tab1:
+        st.plotly_chart(fig_bau, use_container_width=True)
+        # with tab2:
+        st.plotly_chart(fig_wa,  use_container_width=True)
     
     st.markdown("---")
 
