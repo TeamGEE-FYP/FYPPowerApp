@@ -2890,7 +2890,7 @@ elif selection == "Data Analytics":
     st.title("Data Analytics Dashboard")
     # Persistent store for the figures drawn on this page
     if "da_figs" not in st.session_state:         # first visit only
-        st.session_state.da_figs = []             # keep order → list of figures
+        st.session_state.da_figs = {}             # keep order → list of figures
 
 
     # ── Guard rails --------------------------------------------------------
@@ -3303,11 +3303,14 @@ elif selection == "Data Analytics":
             margin=dict(l=50, r=50, t=70, b=40),
         )
         return fig
+                                  
+    # --- caching helper -------------------------------------------------
+    def _remember(slot: str, fig: "plotly.graph_objs.Figure"):
+        """
+        Store/overwrite one figure under a unique slot-name.
+        """
+        st.session_state.da_figs[slot] = fig         # dict → {slot: fig}
 
-    def _remember(fig):
-        figs = st.session_state.da_figs
-        if not figs or figs[-1] is not fig:       # avoid double-adds on rerun
-            figs.append(fig)
     
 
 
@@ -3327,19 +3330,34 @@ elif selection == "Data Analytics":
 
     # st.markdown("---")
 
-    # ── Buttons – vertical stack ------------------------------------------
+    # show old graph (if any) before the button
+    if "load_shed" in st.session_state.da_figs:
+        st.plotly_chart(st.session_state.da_figs["load_shed"],
+                        use_container_width=True,
+                        key="load_shed")
+
     if st.button("Hourly Load-Shedding Comparison"):
         hourly_shed_bau     = [v or 0 for v in hourly_shed_bau]
         hourly_shed_weather = [v or 0 for v in hourly_shed_weather]
-        _remember( make_load_shed_fig(hours,
-                                      hourly_shed_bau,
-                                      hourly_shed_weather) )
-    
+        fig = make_load_shed_fig(hours,
+                                 hourly_shed_bau,
+                                 hourly_shed_weather)
+        _remember("load_shed", fig)
+        st.plotly_chart(fig, use_container_width=True, key="load_shed")
+
     st.markdown("---")
 
+    # ── Generation-Cost difference ----------------------------------------
+    if "cost_diff" in st.session_state.da_figs:
+        st.plotly_chart(st.session_state.da_figs["cost_diff"],
+                        use_container_width=True,
+                        key="cost_diff")
+    
     if st.button("Difference in Generation Cost"):
-        _remember( make_cost_diff_fig(hours, cost_bau, cost_weather) )
-
+        fig = make_cost_diff_fig(hours, cost_bau, cost_weather)
+        _remember("cost_diff", fig)
+        st.plotly_chart(fig, use_container_width=True, key="cost_diff")
+    
     st.markdown("---")
 
     # # ── Potential Revenue-Loss plot ------------------------------------------
@@ -3356,12 +3374,19 @@ elif selection == "Data Analytics":
     # st.markdown("---")
 
     # ── Potential Revenue-Loss plot ---------------------------------------
+    if "rev_loss" in st.session_state.da_figs:
+        st.plotly_chart(st.session_state.da_figs["rev_loss"],
+                        use_container_width=True,
+                        key="rev_loss")
+    
     if st.button("Potential Revenue Loss From Current OPF"):
-        _remember( make_lost_savings_fig(hours,
-                                         cost_bau,
-                                         cost_weather,
-                                         hourly_shed_bau,
-                                         hourly_shed_weather) )
+        fig = make_lost_savings_fig(hours,
+                                    cost_bau,
+                                    cost_weather,
+                                    hourly_shed_bau,
+                                    hourly_shed_weather)
+        _remember("rev_loss", fig)
+        st.plotly_chart(fig, use_container_width=True, key="rev_loss")
     
     st.markdown("---")
 
@@ -3383,13 +3408,21 @@ elif selection == "Data Analytics":
     # st.markdown("---")
 
     # ── Line-Loading-over-Time comparison ---------------------------------
+    for slot in ("line_bau", "line_wa"):
+        if slot in st.session_state.da_figs:
+            st.plotly_chart(st.session_state.da_figs[slot],
+                            use_container_width=True,
+                            key=slot)
+    
     if st.button("Line Loading Over Time Comparison"):
         fig_bau, fig_wa = make_line_loading_figs(hours,
                                                  loading_percent_bau,
                                                  loading_percent_wa,
                                                  df_line)
-        _remember(fig_bau)
-        _remember(fig_wa)
+        _remember("line_bau", fig_bau)
+        _remember("line_wa",  fig_wa)
+        st.plotly_chart(fig_bau, use_container_width=True, key="line_bau")
+        st.plotly_chart(fig_wa,  use_container_width=True, key="line_wa")
     
     st.markdown("---")
 
@@ -3411,16 +3444,23 @@ elif selection == "Data Analytics":
     # st.markdown("---")
 
     # ── Load-Served comparison --------------------------------------------
+    if "load_served" in st.session_state.da_figs:
+        st.plotly_chart(st.session_state.da_figs["load_served"],
+                        use_container_width=True,
+                        key="load_served")
+    
     bus_options = df_load_params["bus"].astype(int).tolist()
     chosen_bus  = st.selectbox("Select Load-Bus",
                                bus_options,
                                key="ls_bus")
     
     if st.button("Show Load-Served Comparison"):
-        _remember( make_load_served_fig(chosen_bus,
-                                        df_load_profile,
-                                        served_bau,
-                                        served_wa) )
+        fig = make_load_served_fig(chosen_bus,
+                                   df_load_profile,
+                                   served_bau,
+                                   served_wa)
+        _remember("load_served", fig)
+        st.plotly_chart(fig, use_container_width=True, key="load_served")
     
     st.markdown("---")
 
@@ -3434,10 +3474,17 @@ elif selection == "Data Analytics":
     
     # st.markdown("---")
 
+    if "slack_disp" in st.session_state.da_figs:
+        st.plotly_chart(st.session_state.da_figs["slack_disp"],
+                        use_container_width=True,
+                        key="slack_disp")
+    
     if st.button("Slack Generator Dispatch Comparison"):
-        _remember( make_slack_dispatch_fig(planned_slack,
-                                           slack_bau,
-                                           slack_wa) )
+        fig = make_slack_dispatch_fig(planned_slack,
+                                      slack_bau,
+                                      slack_wa)
+        _remember("slack_disp", fig)
+        st.plotly_chart(fig, use_container_width=True, key="slack_disp")
     
     st.markdown("---")
 
@@ -3467,6 +3514,12 @@ elif selection == "Data Analytics":
     # ────────────────────────────────────────────────────────────
     # Generator-dispatch comparison
     # ────────────────────────────────────────────────────────────
+    # ── Generator-dispatch (single generator) ------------------------------
+    if "gen_disp" in st.session_state.da_figs:
+        st.plotly_chart(st.session_state.da_figs["gen_disp"],
+                        use_container_width=True,
+                        key="gen_disp")
+    
     gen_bus_options = df_gen_params["bus"].tolist()[1:]
     chosen_gen = st.selectbox("Select Generator (bus id)",
                               gen_bus_options,
@@ -3480,12 +3533,13 @@ elif selection == "Data Analytics":
                                     st.session_state.gen_per_hour_bau,
                                     st.session_state.gen_per_hour_wa)
         if fig:
-            _remember(fig)
+            _remember("gen_disp", fig)
+            st.plotly_chart(fig, use_container_width=True, key="gen_disp")
     
     st.markdown("---")
 
     # ────────────────────────────────────────────────────────────
-    #  (NEW) Render everything the user has asked for so far
+    #  Render everything the user has asked for so far
     # ────────────────────────────────────────────────────────────
     for fig in st.session_state.da_figs:
         st.plotly_chart(fig, use_container_width=True)
