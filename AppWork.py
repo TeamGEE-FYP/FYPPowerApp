@@ -2669,9 +2669,9 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
             "hourly_shed_weather": _hourly_shed_wa,  
             "served_load_per_hour_wa": _served_load_wa,
             "slack_per_hour_wa":         _slack_per_hour_wa,     # ← NEW
-            "planned_slack_per_hour":    _planned_slack_per_hour # ← NEW
-            "wa_line_idx_map":                 line_idx_map,
-            "wa_trafo_idx_map":                trafo_idx_map,
+            "planned_slack_per_hour":    _planned_slack_per_hour, # ← NEW
+            "wa_line_idx_map":  line_idx_map,
+            "wa_trafo_idx_map": trafo_idx_map,
             "wa_max_loading_capacity":         df_lines["max_loading_percent"].max(),
         })
         # if df_trafo is not None and not df_trafo.empty:
