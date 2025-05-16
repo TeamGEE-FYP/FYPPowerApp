@@ -1928,7 +1928,7 @@ elif selection == "Projected Operation - Under Current OPF":
             # ----------------------------------------------------------------------
             hourly_cost_df = pd.DataFrame({
                 "hour": list(range(len(business_as_usuall_cost))),
-                "generation_cost (PKR)": business_as_usuall_cost
+                "Current OPF Generation Cost (PKR)": business_as_usuall_cost
             })
         
             # ----------------------------------------------------------------------
@@ -2235,6 +2235,13 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
             # -----------------------------------------
             path = st.session_state.get("uploaded_file")      # BytesIO object
             xls  = pd.ExcelFile(path)                         # gives .sheet_names
+            if st.session_state.get("bau_hourly_cost_df") is not None:
+                business_as_usuall_cost = (
+                        st.session_state.bau_hourly_cost_df["Current OPF Generation Cost (PKR)"].tolist()
+                    )
+            else:
+                # fallback: plain, no-outage cost
+                business_as_usuall_cost = calculating_hourly_cost(path)
             # —— helper so existing single-arg calls still work ——
             def overloaded_transformer_local(net_):
                 return overloaded_transformer(net_, path, line_outages)
