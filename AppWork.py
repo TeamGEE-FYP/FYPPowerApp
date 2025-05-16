@@ -2894,6 +2894,9 @@ elif selection == "Data Analytics":
     planned_slack = st.session_state.planned_slack_per_hour
     slack_bau      = st.session_state.slack_per_hour_bau
     slack_wa       = st.session_state.slack_per_hour_wa
+    df_gen_params   = st.session_state.network_data["df_gen_params"]      # “Generator Parameters” sheet
+    df_gen_profile  = st.session_state.network_data["df_gen_profile"]     # “Generator Profile”   sheet
+    # ------------------------------------------------------------------
     df_load_profile       = st.session_state.network_data["df_load_profile"]
     df_load_params        = st.session_state.network_data["df_load"]
     served_bau            = st.session_state.served_load_per_hour_bau
@@ -3227,6 +3230,59 @@ elif selection == "Data Analytics":
             margin=dict(l=50, r=50, t=70, b=40),
         )
         return fig
+
+    # =========================================================
+    #  Generator-dispatch comparison  (single generator)
+    # =========================================================
+    def make_gen_dispatch_fig(bus_id: int,
+                              df_params: pd.DataFrame,
+                              df_profile: pd.DataFrame,
+                              gen_per_hour_bau: list[list[float]],
+                              gen_per_hour_wa:  list[list[float]]) -> go.Figure | None:
+    
+        # -------- column name & validity ----------------------------------
+        col = f"p_mw_PV{bus_id}"
+        if col not in df_profile.columns:
+            st.error(f"❌  Column '{col}' not found in the Generator Profile sheet.")
+            return None
+    
+        hours = list(range(len(gen_per_hour_bau)))          # usually 24
+        planned   = df_profile[col].tolist()
+    
+        # the first row in df_gen_params is the slack/ext-grid generator,
+        # so we skip it → index in the *hour-by-hour* lists:
+        gens        = df_params["bus"].tolist()[1:]
+        try:
+            idx = gens.index(bus_id)
+        except ValueError:
+            st.error(f"Generator bus {bus_id} not found in parameter sheet.")
+            return None
+    
+        served_bau  = [hour[idx] for hour in gen_per_hour_bau]
+        served_wa   = [hour[idx] for hour in gen_per_hour_wa]
+    
+        # -------- build the grouped-bar chart -----------------------------
+        fig = go.Figure()
+        fig.add_bar(x=hours, y=planned,   name="Planned Dispatch",
+                    marker_color="rgba(99,110,250,0.8)")
+        fig.add_bar(x=hours, y=served_bau, name="Projected: Current OPF",
+                    marker_color="rgba(239,85,59,0.8)")
+        fig.add_bar(x=hours, y=served_wa,  name="Projected: Weather-Aware OPF",
+                    marker_color="rgba(0,204,150,0.8)")
+    
+        fig.update_layout(
+            title=f"Hourly Generator Dispatch – Bus {bus_id}",
+            xaxis=dict(title="Time [hours]", tickmode="linear", dtick=1),
+            yaxis_title="Generation [MWh]",
+            barmode="group",
+            template="plotly_dark",
+            legend_title="Scenario",
+            height=600,
+            width=1200,
+            margin=dict(l=50, r=50, t=70, b=40),
+        )
+        return fig
+
     
 
 
@@ -3299,6 +3355,32 @@ elif selection == "Data Analytics":
         st.plotly_chart(fig, use_container_width=True)
     
     st.markdown("---")
+
+    # ────────────────────────────────────────────────────────────
+    # Generator-dispatch comparison
+    # ────────────────────────────────────────────────────────────
+    
+    gen_bus_options = df_gen_params["bus"].tolist()[1:]          # skip ext-grid
+    chosen_gen = st.selectbox(
+        "Select Generator (bus id)",
+        gen_bus_options,
+        format_func=lambda b: f"Generator {b}",
+        key="gen_bus_picker",
+    )
+    
+    if st.button("Show Hourly Generator Dispatch Comparison"):
+        fig = make_gen_dispatch_fig(
+            bus_id=chosen_gen,
+            df_params=df_gen_params,
+            df_profile=df_gen_profile,
+            gen_per_hour_bau=st.session_state.bau_results["gen_per_hour_bau"],
+            gen_per_hour_wa =st.session_state.wa_results ["gen_per_hour_wa"],
+        )
+        if fig:                              # only plot if the helper returned a fig
+            st.plotly_chart(fig, use_container_width=True)
+    
+    st.markdown("---")
+
 
 
 
