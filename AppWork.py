@@ -2643,9 +2643,9 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
         #         df_trafo["max_loading_percent"].max()
         #     )
 
-        if isinstance(_df_trafo, pd.DataFrame) and not _df_trafo.empty:
+        if isinstance(df_trafo, pd.DataFrame) and not df_trafo.empty:
                 st.session_state.max_loading_capacity_transformer = (
-                    _df_trafo["max_loading_percent"].max()
+                    df_trafo["max_loading_percent"].max()
                 )
 
         # if st.session_state.wa_ready:
