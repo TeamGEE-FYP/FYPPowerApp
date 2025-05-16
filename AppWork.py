@@ -2886,9 +2886,8 @@ elif selection == "Data Analytics":
 
     # --- pull the cached series we need -----------------------------------
     hours                = list(range(len(st.session_state.bau_hourly_cost_df)))
-    load_shed_bau        = st.session_state.bau_results["shedding_buses"]
-    hourly_shed_bau      = st.session_state.bau_results.get("hourly_shed_bau")  # list[float]
-    hourly_shed_weather  = st.session_state.wa_results.get("hourly_shed_weather_aware")
+    hourly_shed_bau     = st.session_state.hourly_shed_bau
+    hourly_shed_weather = st.session_state.hourly_shed_weather
     cost_bau             = st.session_state.bau_hourly_cost_df[
         "Current OPF Generation Cost (PKR)"
     ].tolist()
@@ -2989,6 +2988,9 @@ elif selection == "Data Analytics":
 
     # ── Buttons – vertical stack ------------------------------------------
     if st.button("Hourly Load-Shedding Comparison"):
+        # clean up possible None values so Plotly can plot
+        hourly_shed_bau     = [v if v is not None else 0 for v in hourly_shed_bau]
+        hourly_shed_weather = [v if v is not None else 0 for v in hourly_shed_weather]
         fig_ls = make_load_shed_fig(hours, hourly_shed_bau, hourly_shed_weather)
         st.plotly_chart(fig_ls, use_container_width=True)
 
