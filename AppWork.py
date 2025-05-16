@@ -3161,7 +3161,7 @@ elif selection == "Data Analytics":
             loading_percent_bau,
             loading_percent_wa,
             df_line,
-        # )
+        )
         # # use tabs so both plots fit nicely
         # tab1, tab2 = st.tabs(["Current OPF", "Weather-Aware OPF"])
         # with tab1:
