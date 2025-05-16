@@ -3388,8 +3388,8 @@ elif selection == "Data Analytics":
             bus_id=chosen_gen,
             df_params=df_gen_params,
             df_profile=df_gen_profile,
-            gen_per_hour_bau=st.session_state.bau_results["gen_per_hour_bau"],
-            gen_per_hour_wa =st.session_state.wa_results ["gen_per_hour_wa"],
+            gen_per_hour_bau = st.session_state.gen_per_hour_bau,
+            gen_per_hour_wa  = st.session_state.gen_per_hour_wa,
         )
         if fig:                              # only plot if the helper returned a fig
             st.plotly_chart(fig, use_container_width=True)
