@@ -1978,6 +1978,7 @@ elif selection == "Projected Operation - Under Current OPF":
             },
             "hourly_shed_bau":     _shed,   
             "served_load_per_hour_bau": _served,
+            "gen_per_hour_bau":    _gen,        
             "slack_per_hour_bau":        _slack,   
             "line_idx_map":                     _line_idx_map,
             "trafo_idx_map":                    _trafo_idx_map,
@@ -2671,6 +2672,7 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
             },
             "hourly_shed_weather": _hourly_shed_wa,  
             "served_load_per_hour_wa": _served_load_wa,
+            "gen_per_hour_wa":    _gen_per_hour_wa, 
             "slack_per_hour_wa":         _slack_per_hour_wa,     # ← NEW
             "planned_slack_per_hour":    _planned_slack_per_hour, # ← NEW
             "wa_line_idx_map":  line_idx_map,
