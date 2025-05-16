@@ -2886,516 +2886,626 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
 # ────────────────────────────────────────────────────────────────────────────
 elif selection == "Data Analytics":
     st.title("Data Analytics Dashboard")
+    # ──────────────────────────────────────────────────────────────
+    # Page-level cache – every plot we draw will live in here
+    # ──────────────────────────────────────────────────────────────
+    if "analytics_figs" not in st.session_state:
+        st.session_state.analytics_figs = {}        # {key: plotly.Figure}
+    
+    # Helper flag used everywhere below
+    data_ready = st.session_state.get("bau_ready") and st.session_state.get("wa_ready")
+
 
     # ── Guard rails --------------------------------------------------------
-    if not (st.session_state.get("bau_ready") and st.session_state.get("wa_ready")):
+    # if not (st.session_state.get("bau_ready") and st.session_state.get("wa_ready")):
+    #     st.info(
+    #         "Please run both **Projected Operation – Under Current OPF** "
+    #         "and **Projected Operation – Under Weather-Risk-Aware OPF** first."
+    #     )
+    #     st.stop()
+
+    # ── Info banner if the upstream pages haven't run yet ─────────
+
+    if not data_ready:
         st.info(
-            "Please run both **Projected Operation – Under Current OPF** "
-            "and **Projected Operation – Under Weather-Risk-Aware OPF** first."
+            "Please run **Projected Operation – Under Current OPF** **and** "
+            "**Projected Operation – Under Weather-Risk-Aware OPF** first.  "
+            "The buttons below are disabled until those results exist."
         )
-        st.stop()
 
-    # --- pull the cached series we need -----------------------------------
-    planned_slack = st.session_state.planned_slack_per_hour
-    slack_bau      = st.session_state.slack_per_hour_bau
-    slack_wa       = st.session_state.slack_per_hour_wa
-    if "df_gen_params" not in st.session_state.network_data:
-        path = st.session_state.get("uploaded_file")
-        st.session_state.network_data["df_gen_params"] = pd.read_excel(
-            path, sheet_name="Generator Parameters"
-        )
-    if "df_gen_profile" not in st.session_state.network_data:
-        path = st.session_state.get("uploaded_file")
-        st.session_state.network_data["df_gen_profile"] = pd.read_excel(
-            path, sheet_name="Generator Profile"
-        )
-    df_gen_params   = st.session_state.network_data["df_gen_params"]      # “Generator Parameters” sheet
-    df_gen_profile  = st.session_state.network_data["df_gen_profile"]     # “Generator Profile”   sheet
-    # ------------------------------------------------------------------
-    df_load_profile       = st.session_state.network_data["df_load_profile"]
-    df_load_params        = st.session_state.network_data["df_load"]
-    served_bau            = st.session_state.served_load_per_hour_bau
-    served_wa             = st.session_state.served_load_per_hour_wa
-    loading_percent_bau = st.session_state.bau_results["loading_percent_bau"]
-    loading_percent_wa  = st.session_state.wa_results["loading_percent_wa"]
-    df_line             = st.session_state.network_data["df_line"].copy()
-    hours                = list(range(len(st.session_state.bau_hourly_cost_df)))
-    hourly_shed_bau     = st.session_state.hourly_shed_bau
-    hourly_shed_weather = st.session_state.hourly_shed_weather
-    cost_bau             = st.session_state.bau_hourly_cost_df[
-        "Current OPF Generation Cost (PKR)"
-    ].tolist()
-    cost_weather         = st.session_state.wa_hourly_cost_df[
-        "Weather-Aware OPF Cost (PKR)"
-    ].tolist()
-
-    # **************************************************************
-    # *  Helper functions – identical maths, but return a Figure   *
-    # **************************************************************
-    def make_load_shed_fig(hours, shed_bau, shed_wa):
-        shed_bau_mwh = shed_bau                                   # already in MWh
-        shed_wa_mwh  = shed_wa
-
-        fig = go.Figure()
-        fig.add_trace(
-            go.Scatter(
-                x=hours,
-                y=shed_bau_mwh,
-                mode="lines+markers",
-                name="Projected Operation: Current OPF Load Shedding",
-                line=dict(color="rgba(99,110,250,1)", width=3),
-                marker=dict(size=6),
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=hours,
-                y=shed_wa_mwh,
-                mode="lines+markers",
-                name="Projected Operation: Weather-Aware OPF Load Shedding",
-                line=dict(color="rgba(239,85,59,1)", width=3),
-                marker=dict(size=6),
-            )
-        )
-        fig.update_layout(
-            title="Hourly Load-Shedding Comparison",
-            xaxis_title="Time [hours]",
-            yaxis_title="Load Shedding [MWh]",
-            xaxis=dict(tickmode="linear", dtick=1, range=[0, max(hours)]),
-            template="plotly_dark",
-            legend=dict(x=0.01, y=0.99),
-            width=1000,
-            height=500,
-            margin=dict(l=60, r=40, t=60, b=50),
-        )
-        return fig
-
-    def make_cost_diff_fig(hours, cost_bau, cost_wa):
-        # scale to millions
-        cost_bau_m = [x / 1e6 for x in cost_bau]
-        cost_wa_m  = [x / 1e6 for x in cost_wa]
-
-        fig = go.Figure()
-
-        fig.add_trace(
-            go.Scatter(
-                x=hours + hours[::-1],
-                y=cost_bau_m + cost_wa_m[::-1],
-                fill="toself",
-                fillcolor="rgba(255,140,0,0.3)",
-                line=dict(color="rgba(255,255,255,0)"),
-                hoverinfo="skip",
-                showlegend=True,
-                name="Cost Difference",
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=hours,
-                y=cost_bau_m,
-                mode="lines+markers",
-                name="Projected Operation: Current OPF Cost",
-                line=dict(color="rgba(0,204,150,1)", width=3),
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=hours,
-                y=cost_wa_m,
-                mode="lines+markers",
-                name="Projected Operation: Weather-Aware Cost",
-                line=dict(color="rgba(171,99,250,1)", width=3),
-            )
-        )
-        fig.update_layout(
-            title="Difference in Generation Cost",
-            xaxis_title="Time [hours]",
-            yaxis_title="Cost [millions PKR]",
-            xaxis=dict(tickmode="linear", dtick=1, range=[0, max(hours)]),
-            template="plotly_dark",
-            legend=dict(x=0.01, y=0.99),
-            width=1200,
-            height=500,
-            margin=dict(l=60, r=40, t=60, b=50),
-        )
-        return fig
-        
-    def make_lost_savings_fig(hours,
-                          cost_bau,
-                          cost_weather,
-                          shed_bau,
-                          shed_wa):
-        # -- convert everything to the units the Colab code expects -------------
-        cost_bau_m  = [x / 1e6 for x in cost_bau]
-        cost_wa_m   = [x / 1e6 for x in cost_weather]
-    
-        lost_savings = [
-            wa - bau if wa > bau else 0
-            for wa, bau in zip(cost_wa_m, cost_bau_m)
-        ]
-    
-        # shed arrays come in MWh already; turn any None into 0
-        shed_bau = [float(x) if x is not None else 0.0 for x in shed_bau]
-        shed_wa  = [float(x) if x is not None else 0.0 for x in shed_wa]
-    
-        # PKR 45 000 per MWh  →  /1e6 gives “millions PKR”
-        lost_revenue = [
-            (bau_ld - wa_ld) * (45_000 / 1e6)
-            for bau_ld, wa_ld in zip(shed_bau, shed_wa)
-        ]
-    
-        # ----------------------------- Plotly figure --------------------------
-        fig = go.Figure()
-    
-        fig.add_trace(
-            go.Scatter(
-                x=hours,
-                y=lost_savings,
-                fill="tozeroy",
-                mode="none",
-                name="Difference in Generation Cost",
-                fillcolor="rgba(255,99,71,0.6)",     # soft red
-                hovertemplate="Hour %{x}: %{y:.2f} M PKR<extra></extra>",
-            )
-        )
-    
-        fig.add_trace(
-            go.Scatter(
-                x=hours,
-                y=lost_revenue,
-                fill="tozeroy",
-                mode="none",
-                name="Potential Loss of Revenue",
-                fillcolor="rgba(0,0,255,0.4)",       # soft blue
-                hovertemplate="Hour %{x}: %{y:.2f} M PKR<extra></extra>",
-            )
-        )
-    
-        fig.update_layout(
-            title="Potential Revenue Loss from Current OPF",
-            xaxis_title="Time [hours]",
-            yaxis_title="Lost Revenue [millions PKR]",
-            xaxis=dict(tickmode="linear", dtick=1, range=[0, max(hours)]),
-            template="plotly_dark",
-            width=1000,
-            height=500,
-            legend=dict(x=0.01, y=0.99),
-            margin=dict(l=60, r=40, t=60, b=50),
-        )
-        return fig
-
-    def make_line_loading_figs(hours,
-                           loading_bau,
-                           loading_wa,
-                           df_line):
-    
-        # ▸ convert to NumPy   [time  ×  lines&trafos]
-        bau = np.array(loading_bau)
-        wa  = np.array(loading_wa)
-    
-        # keep only the real transmission lines so legend lengths match
-        n_lines = len(df_line)
-        bau = bau[:, :n_lines]
-        wa  = wa[:, :n_lines]
-    
-        line_legends = [
-            f"Line {row['from_bus']}-{row['to_bus']}"
-            for _, row in df_line.iterrows()
-        ]
-    
-        colours = px.colors.qualitative.Plotly
-        colour_list = colours * (n_lines // len(colours) + 1)
-    
-        # ---------- Current-OPF figure (solid) -------------------------------
-        fig_bau = go.Figure()
-        for idx in range(n_lines):
-            fig_bau.add_trace(
-                go.Scatter(
-                    x=hours,
-                    y=bau[:, idx],
-                    mode="lines",
-                    line=dict(color=colour_list[idx], width=3, dash="solid"),
-                    name=line_legends[idx],
-                )
-            )
-        fig_bau.update_layout(
-            title="Projected Operation – Current OPF<br>Line Loading Over Time",
-            template="plotly_dark",
-            xaxis_title="Time [hours]",
-            yaxis_title="Line Loading [%]",
-            xaxis=dict(tickmode="linear", dtick=1, range=[0, max(hours)]),
-            width=1000,
-            height=500,
-            # legend=dict(x=0.01, y=0.99),
-            # margin=dict(l=60, r=40, t=80, b=50),
-            # --- new legend placement & room on the right -----------------
-            legend=dict(
-                orientation="v",      # vertical list
-                yanchor="top", y=1,   # pin its top-left corner …
-                xanchor="left", x=1.02,   # … just outside the plot area
-                bgcolor="rgba(0,0,0,0)",  # transparent background
-                borderwidth=0,
-            ),
-            margin=dict(l=60, r=220, t=80, b=50),  # extra space for the legend
-            # width=1000,                             # (optional) give the plot
-
-        )
-    
-        # ---------- Weather-Aware figure (dashed) ----------------------------
-        fig_wa = go.Figure()
-        for idx in range(n_lines):
-            fig_wa.add_trace(
-                go.Scatter(
-                    x=hours,
-                    y=wa[:, idx],
-                    mode="lines",
-                    line=dict(color=colour_list[idx], width=3, dash="dash"),
-                    name=line_legends[idx],
-                )
-            )
-        # fig_wa.update_layout(
-        #     title="Projected Operation – Weather-Aware OPF<br>Line Loading Over Time",
-        #     template="plotly_dark",
-        #     xaxis_title="Time [hours]",
-        #     yaxis_title="Line Loading [%]",
-        #     xaxis=dict(tickmode="linear", dtick=1, range=[0, max(hours)]),
-        #     width=1000,
-        #     height=500,
-        #     # legend=dict(x=0.01, y=0.99),
-        #     # margin=dict(l=60, r=40, t=80, b=50),
-            
-        # )
-        fig_wa.update_layout(
-            title="Projected Operation – Weather-Aware OPF<br>Line Loading Over Time",
-            template="plotly_dark",
-            xaxis_title="Time [hours]",
-            yaxis_title="Line Loading [%]",
-            xaxis=dict(tickmode="linear", dtick=1, range=[0, max(hours)]),
-            legend=dict(
-                orientation="v",
-                yanchor="top", y=1,
-                xanchor="left", x=1.02,
-                bgcolor="rgba(0,0,0,0)",
-                borderwidth=0,
-            ),
-            margin=dict(l=60, r=220, t=80, b=50),
-            width=1000,              # keep or remove as you prefer
-            height=500,
-        )
-        return fig_bau, fig_wa
-
-    def make_load_served_fig(bus_id: int,
-                         df_load_profile: pd.DataFrame,
-                         served_bau: list[list[float]],
-                         served_wa:  list[list[float]]):
- 
-        hrs   = list(range(len(served_bau)))
-        col   = f"p_mw_bus_{bus_id}"
-        demand = df_load_profile[col].tolist()
-        bus_id_idx = df_load_params["bus"].tolist().index(bus_id)
-        srv_bau = [h[bus_id_idx] for h in served_bau]
-        srv_wa  = [h[bus_id_idx] for h in served_wa]
-    
-        fig = go.Figure()
-        fig.add_bar(x=hrs, y=demand,  name="Load Demand",
-                    marker=dict(color="rgba(99,110,250,0.8)"))
-        fig.add_bar(x=hrs, y=srv_bau, name="Current OPF Served",
-                    marker=dict(color="rgba(239,85,59,0.8)"))
-        fig.add_bar(x=hrs, y=srv_wa,  name="Weather-Aware Served",
-                    marker=dict(color="rgba(0,204,150,0.8)"))
-    
-        fig.update_layout(
-            title=f"Hourly Load-Served Comparison – Bus {bus_id}",
-            xaxis=dict(title="Hour", tickmode="linear", dtick=1),
-            yaxis_title="Load [MWh]",
-            barmode="group",
-            template="plotly_dark",
-            width=1200, height=600,
-            margin=dict(l=40, r=40, t=60, b=40),
-        )
-        return fig
-    def make_slack_dispatch_fig(planned: list[float],
-                                slack_bau: list[float],
-                                slack_wa:  list[float]) -> go.Figure:
+    # --------------------------------------------------------------
+    if data_ready and "analytics_data_prepared" not in st.session_state::
        
-        hrs = list(range(len(planned)))
-    
-        # replace None with 0 to avoid gaps
-        planned   = [p or 0 for p in planned]
-        slack_bau = [s or 0 for s in slack_bau]
-        slack_wa  = [s or 0 for s in slack_wa]
-    
-        fig = go.Figure()
-        fig.add_bar(x=hrs, y=planned,   name="Planned Dispatch",
-                    marker_color="rgba(99,110,250,0.8)")
-        fig.add_bar(x=hrs, y=slack_bau, name="Current OPF",
-                    marker_color="rgba(239,85,59,0.8)")
-        fig.add_bar(x=hrs, y=slack_wa,  name="Weather-Aware OPF",
-                    marker_color="rgba(0,204,150,0.8)")
-    
-        fig.update_layout(
-            title="Hourly Slack-Generator Dispatch Comparison",
-            xaxis=dict(title="Hour", tickmode="linear", dtick=1,
-                       range=[0, max(hrs)]),
-            yaxis_title="Generation [MWh]",
-            barmode="group",
-            template="plotly_dark",
-            legend_title="Scenario",
-            width=1200, height=600,
-            margin=dict(l=50, r=50, t=70, b=40),
-        )
-        return fig
+        # --- pull the cached series we need -----------------------------------
+        planned_slack = st.session_state.planned_slack_per_hour
+        slack_bau      = st.session_state.slack_per_hour_bau
+        slack_wa       = st.session_state.slack_per_hour_wa
+        if "df_gen_params" not in st.session_state.network_data:
+            path = st.session_state.get("uploaded_file")
+            st.session_state.network_data["df_gen_params"] = pd.read_excel(
+                path, sheet_name="Generator Parameters"
+            )
+        if "df_gen_profile" not in st.session_state.network_data:
+            path = st.session_state.get("uploaded_file")
+            st.session_state.network_data["df_gen_profile"] = pd.read_excel(
+                path, sheet_name="Generator Profile"
+            )
+        df_gen_params   = st.session_state.network_data["df_gen_params"]      # “Generator Parameters” sheet
+        df_gen_profile  = st.session_state.network_data["df_gen_profile"]     # “Generator Profile”   sheet
+        # ------------------------------------------------------------------
+        df_load_profile       = st.session_state.network_data["df_load_profile"]
+        df_load_params        = st.session_state.network_data["df_load"]
+        served_bau            = st.session_state.served_load_per_hour_bau
+        served_wa             = st.session_state.served_load_per_hour_wa
+        loading_percent_bau = st.session_state.bau_results["loading_percent_bau"]
+        loading_percent_wa  = st.session_state.wa_results["loading_percent_wa"]
+        df_line             = st.session_state.network_data["df_line"].copy()
+        hours                = list(range(len(st.session_state.bau_hourly_cost_df)))
+        hourly_shed_bau     = st.session_state.hourly_shed_bau
+        hourly_shed_weather = st.session_state.hourly_shed_weather
+        cost_bau             = st.session_state.bau_hourly_cost_df[
+            "Current OPF Generation Cost (PKR)"
+        ].tolist()
+        cost_weather         = st.session_state.wa_hourly_cost_df[
+            "Weather-Aware OPF Cost (PKR)"
+        ].tolist()
 
-    # =========================================================
-    #  Generator-dispatch comparison  (single generator)
-    # =========================================================
-    def make_gen_dispatch_fig(bus_id: int,
-                              df_params: pd.DataFrame,
-                              df_profile: pd.DataFrame,
-                              gen_per_hour_bau: list[list[float]],
-                              gen_per_hour_wa:  list[list[float]]) -> go.Figure | None:
-    
-        # -------- column name & validity ----------------------------------
-        col = f"p_mw_PV{bus_id}"
-        if col not in df_profile.columns:
-            st.error(f"❌  Column '{col}' not found in the Generator Profile sheet.")
-            return None
-    
-        hours = list(range(len(gen_per_hour_bau)))          # usually 24
-        planned   = df_profile[col].tolist()
-    
-        # the first row in df_gen_params is the slack/ext-grid generator,
-        # so we skip it → index in the *hour-by-hour* lists:
-        gens        = df_params["bus"].tolist()[1:]
-        try:
-            idx = gens.index(bus_id)
-        except ValueError:
-            st.error(f"Generator bus {bus_id} not found in parameter sheet.")
-            return None
-    
-        served_bau  = [hour[idx] for hour in gen_per_hour_bau]
-        served_wa   = [hour[idx] for hour in gen_per_hour_wa]
-    
-        # -------- build the grouped-bar chart -----------------------------
-        fig = go.Figure()
-        fig.add_bar(x=hours, y=planned,   name="Planned Dispatch",
-                    marker_color="rgba(99,110,250,0.8)")
-        fig.add_bar(x=hours, y=served_bau, name="Projected: Current OPF",
-                    marker_color="rgba(239,85,59,0.8)")
-        fig.add_bar(x=hours, y=served_wa,  name="Projected: Weather-Aware OPF",
-                    marker_color="rgba(0,204,150,0.8)")
-    
-        fig.update_layout(
-            title=f"Hourly Generator Dispatch – Bus {bus_id}",
-            xaxis=dict(title="Time [hours]", tickmode="linear", dtick=1),
-            yaxis_title="Generation [MWh]",
-            barmode="group",
-            template="plotly_dark",
-            legend_title="Scenario",
-            height=600,
-            width=1200,
-            margin=dict(l=50, r=50, t=70, b=40),
-        )
-        return fig
+        st.session_state.analytics_data_prepared = True
 
+    # helper to shorten code when adding a new fig
+    def _add_fig(key: str, fig: "plotly.Figure"):      # noqa: F821
+        st.session_state.analytics_figs[key] = fig
+
+    if data_ready:
     
-
-
-    # ── Buttons – vertical stack ------------------------------------------
-    if st.button("Hourly Load-Shedding Comparison"):
-        # clean up possible None values so Plotly can plot
-        hourly_shed_bau     = [v if v is not None else 0 for v in hourly_shed_bau]
-        hourly_shed_weather = [v if v is not None else 0 for v in hourly_shed_weather]
-        fig_ls = make_load_shed_fig(hours, hourly_shed_bau, hourly_shed_weather)
-        st.plotly_chart(fig_ls, use_container_width=True)
-
-    st.markdown("---")
-
-    if st.button("Difference in Generation Cost"):
-        fig_cost = make_cost_diff_fig(hours, cost_bau, cost_weather)
-        st.plotly_chart(fig_cost, use_container_width=True)
-
-    st.markdown("---")
-    # ── Potential Revenue-Loss plot ------------------------------------------
-    if st.button("Potential Revenue Loss From Current OPF"):
-        fig_loss = make_lost_savings_fig(
-            hours,
-            cost_bau,
-            cost_weather,
-            hourly_shed_bau,
-            hourly_shed_weather,
-        )
-        st.plotly_chart(fig_loss, use_container_width=True)
+        # **************************************************************
+        # *  Helper functions – identical maths, but return a Figure   *
+        # **************************************************************
+        def make_load_shed_fig(hours, shed_bau, shed_wa):
+            shed_bau_mwh = shed_bau                                   # already in MWh
+            shed_wa_mwh  = shed_wa
     
-    st.markdown("---")
+            fig = go.Figure()
+            fig.add_trace(
+                go.Scatter(
+                    x=hours,
+                    y=shed_bau_mwh,
+                    mode="lines+markers",
+                    name="Projected Operation: Current OPF Load Shedding",
+                    line=dict(color="rgba(99,110,250,1)", width=3),
+                    marker=dict(size=6),
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=hours,
+                    y=shed_wa_mwh,
+                    mode="lines+markers",
+                    name="Projected Operation: Weather-Aware OPF Load Shedding",
+                    line=dict(color="rgba(239,85,59,1)", width=3),
+                    marker=dict(size=6),
+                )
+            )
+            fig.update_layout(
+                title="Hourly Load-Shedding Comparison",
+                xaxis_title="Time [hours]",
+                yaxis_title="Load Shedding [MWh]",
+                xaxis=dict(tickmode="linear", dtick=1, range=[0, max(hours)]),
+                template="plotly_dark",
+                legend=dict(x=0.01, y=0.99),
+                width=1000,
+                height=500,
+                margin=dict(l=60, r=40, t=60, b=50),
+            )
+            return fig
+    
+        def make_cost_diff_fig(hours, cost_bau, cost_wa):
+            # scale to millions
+            cost_bau_m = [x / 1e6 for x in cost_bau]
+            cost_wa_m  = [x / 1e6 for x in cost_wa]
+    
+            fig = go.Figure()
+    
+            fig.add_trace(
+                go.Scatter(
+                    x=hours + hours[::-1],
+                    y=cost_bau_m + cost_wa_m[::-1],
+                    fill="toself",
+                    fillcolor="rgba(255,140,0,0.3)",
+                    line=dict(color="rgba(255,255,255,0)"),
+                    hoverinfo="skip",
+                    showlegend=True,
+                    name="Cost Difference",
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=hours,
+                    y=cost_bau_m,
+                    mode="lines+markers",
+                    name="Projected Operation: Current OPF Cost",
+                    line=dict(color="rgba(0,204,150,1)", width=3),
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=hours,
+                    y=cost_wa_m,
+                    mode="lines+markers",
+                    name="Projected Operation: Weather-Aware Cost",
+                    line=dict(color="rgba(171,99,250,1)", width=3),
+                )
+            )
+            fig.update_layout(
+                title="Difference in Generation Cost",
+                xaxis_title="Time [hours]",
+                yaxis_title="Cost [millions PKR]",
+                xaxis=dict(tickmode="linear", dtick=1, range=[0, max(hours)]),
+                template="plotly_dark",
+                legend=dict(x=0.01, y=0.99),
+                width=1200,
+                height=500,
+                margin=dict(l=60, r=40, t=60, b=50),
+            )
+            return fig
+            
+        def make_lost_savings_fig(hours,
+                              cost_bau,
+                              cost_weather,
+                              shed_bau,
+                              shed_wa):
+            # -- convert everything to the units the Colab code expects -------------
+            cost_bau_m  = [x / 1e6 for x in cost_bau]
+            cost_wa_m   = [x / 1e6 for x in cost_weather]
+        
+            lost_savings = [
+                wa - bau if wa > bau else 0
+                for wa, bau in zip(cost_wa_m, cost_bau_m)
+            ]
+        
+            # shed arrays come in MWh already; turn any None into 0
+            shed_bau = [float(x) if x is not None else 0.0 for x in shed_bau]
+            shed_wa  = [float(x) if x is not None else 0.0 for x in shed_wa]
+        
+            # PKR 45 000 per MWh  →  /1e6 gives “millions PKR”
+            lost_revenue = [
+                (bau_ld - wa_ld) * (45_000 / 1e6)
+                for bau_ld, wa_ld in zip(shed_bau, shed_wa)
+            ]
+        
+            # ----------------------------- Plotly figure --------------------------
+            fig = go.Figure()
+        
+            fig.add_trace(
+                go.Scatter(
+                    x=hours,
+                    y=lost_savings,
+                    fill="tozeroy",
+                    mode="none",
+                    name="Difference in Generation Cost",
+                    fillcolor="rgba(255,99,71,0.6)",     # soft red
+                    hovertemplate="Hour %{x}: %{y:.2f} M PKR<extra></extra>",
+                )
+            )
+        
+            fig.add_trace(
+                go.Scatter(
+                    x=hours,
+                    y=lost_revenue,
+                    fill="tozeroy",
+                    mode="none",
+                    name="Potential Loss of Revenue",
+                    fillcolor="rgba(0,0,255,0.4)",       # soft blue
+                    hovertemplate="Hour %{x}: %{y:.2f} M PKR<extra></extra>",
+                )
+            )
+        
+            fig.update_layout(
+                title="Potential Revenue Loss from Current OPF",
+                xaxis_title="Time [hours]",
+                yaxis_title="Lost Revenue [millions PKR]",
+                xaxis=dict(tickmode="linear", dtick=1, range=[0, max(hours)]),
+                template="plotly_dark",
+                width=1000,
+                height=500,
+                legend=dict(x=0.01, y=0.99),
+                margin=dict(l=60, r=40, t=60, b=50),
+            )
+            return fig
+    
+        def make_line_loading_figs(hours,
+                               loading_bau,
+                               loading_wa,
+                               df_line):
+        
+            # ▸ convert to NumPy   [time  ×  lines&trafos]
+            bau = np.array(loading_bau)
+            wa  = np.array(loading_wa)
+        
+            # keep only the real transmission lines so legend lengths match
+            n_lines = len(df_line)
+            bau = bau[:, :n_lines]
+            wa  = wa[:, :n_lines]
+        
+            line_legends = [
+                f"Line {row['from_bus']}-{row['to_bus']}"
+                for _, row in df_line.iterrows()
+            ]
+        
+            colours = px.colors.qualitative.Plotly
+            colour_list = colours * (n_lines // len(colours) + 1)
+        
+            # ---------- Current-OPF figure (solid) -------------------------------
+            fig_bau = go.Figure()
+            for idx in range(n_lines):
+                fig_bau.add_trace(
+                    go.Scatter(
+                        x=hours,
+                        y=bau[:, idx],
+                        mode="lines",
+                        line=dict(color=colour_list[idx], width=3, dash="solid"),
+                        name=line_legends[idx],
+                    )
+                )
+            fig_bau.update_layout(
+                title="Projected Operation – Current OPF<br>Line Loading Over Time",
+                template="plotly_dark",
+                xaxis_title="Time [hours]",
+                yaxis_title="Line Loading [%]",
+                xaxis=dict(tickmode="linear", dtick=1, range=[0, max(hours)]),
+                width=1000,
+                height=500,
+                # legend=dict(x=0.01, y=0.99),
+                # margin=dict(l=60, r=40, t=80, b=50),
+                # --- new legend placement & room on the right -----------------
+                legend=dict(
+                    orientation="v",      # vertical list
+                    yanchor="top", y=1,   # pin its top-left corner …
+                    xanchor="left", x=1.02,   # … just outside the plot area
+                    bgcolor="rgba(0,0,0,0)",  # transparent background
+                    borderwidth=0,
+                ),
+                margin=dict(l=60, r=220, t=80, b=50),  # extra space for the legend
+                # width=1000,                             # (optional) give the plot
+    
+            )
+        
+            # ---------- Weather-Aware figure (dashed) ----------------------------
+            fig_wa = go.Figure()
+            for idx in range(n_lines):
+                fig_wa.add_trace(
+                    go.Scatter(
+                        x=hours,
+                        y=wa[:, idx],
+                        mode="lines",
+                        line=dict(color=colour_list[idx], width=3, dash="dash"),
+                        name=line_legends[idx],
+                    )
+                )
+            # fig_wa.update_layout(
+            #     title="Projected Operation – Weather-Aware OPF<br>Line Loading Over Time",
+            #     template="plotly_dark",
+            #     xaxis_title="Time [hours]",
+            #     yaxis_title="Line Loading [%]",
+            #     xaxis=dict(tickmode="linear", dtick=1, range=[0, max(hours)]),
+            #     width=1000,
+            #     height=500,
+            #     # legend=dict(x=0.01, y=0.99),
+            #     # margin=dict(l=60, r=40, t=80, b=50),
+                
+            # )
+            fig_wa.update_layout(
+                title="Projected Operation – Weather-Aware OPF<br>Line Loading Over Time",
+                template="plotly_dark",
+                xaxis_title="Time [hours]",
+                yaxis_title="Line Loading [%]",
+                xaxis=dict(tickmode="linear", dtick=1, range=[0, max(hours)]),
+                legend=dict(
+                    orientation="v",
+                    yanchor="top", y=1,
+                    xanchor="left", x=1.02,
+                    bgcolor="rgba(0,0,0,0)",
+                    borderwidth=0,
+                ),
+                margin=dict(l=60, r=220, t=80, b=50),
+                width=1000,              # keep or remove as you prefer
+                height=500,
+            )
+            return fig_bau, fig_wa
+    
+        def make_load_served_fig(bus_id: int,
+                             df_load_profile: pd.DataFrame,
+                             served_bau: list[list[float]],
+                             served_wa:  list[list[float]]):
+     
+            hrs   = list(range(len(served_bau)))
+            col   = f"p_mw_bus_{bus_id}"
+            demand = df_load_profile[col].tolist()
+            bus_id_idx = df_load_params["bus"].tolist().index(bus_id)
+            srv_bau = [h[bus_id_idx] for h in served_bau]
+            srv_wa  = [h[bus_id_idx] for h in served_wa]
+        
+            fig = go.Figure()
+            fig.add_bar(x=hrs, y=demand,  name="Load Demand",
+                        marker=dict(color="rgba(99,110,250,0.8)"))
+            fig.add_bar(x=hrs, y=srv_bau, name="Current OPF Served",
+                        marker=dict(color="rgba(239,85,59,0.8)"))
+            fig.add_bar(x=hrs, y=srv_wa,  name="Weather-Aware Served",
+                        marker=dict(color="rgba(0,204,150,0.8)"))
+        
+            fig.update_layout(
+                title=f"Hourly Load-Served Comparison – Bus {bus_id}",
+                xaxis=dict(title="Hour", tickmode="linear", dtick=1),
+                yaxis_title="Load [MWh]",
+                barmode="group",
+                template="plotly_dark",
+                width=1200, height=600,
+                margin=dict(l=40, r=40, t=60, b=40),
+            )
+            return fig
+        def make_slack_dispatch_fig(planned: list[float],
+                                    slack_bau: list[float],
+                                    slack_wa:  list[float]) -> go.Figure:
+           
+            hrs = list(range(len(planned)))
+        
+            # replace None with 0 to avoid gaps
+            planned   = [p or 0 for p in planned]
+            slack_bau = [s or 0 for s in slack_bau]
+            slack_wa  = [s or 0 for s in slack_wa]
+        
+            fig = go.Figure()
+            fig.add_bar(x=hrs, y=planned,   name="Planned Dispatch",
+                        marker_color="rgba(99,110,250,0.8)")
+            fig.add_bar(x=hrs, y=slack_bau, name="Current OPF",
+                        marker_color="rgba(239,85,59,0.8)")
+            fig.add_bar(x=hrs, y=slack_wa,  name="Weather-Aware OPF",
+                        marker_color="rgba(0,204,150,0.8)")
+        
+            fig.update_layout(
+                title="Hourly Slack-Generator Dispatch Comparison",
+                xaxis=dict(title="Hour", tickmode="linear", dtick=1,
+                           range=[0, max(hrs)]),
+                yaxis_title="Generation [MWh]",
+                barmode="group",
+                template="plotly_dark",
+                legend_title="Scenario",
+                width=1200, height=600,
+                margin=dict(l=50, r=50, t=70, b=40),
+            )
+            return fig
+    
+        # =========================================================
+        #  Generator-dispatch comparison  (single generator)
+        # =========================================================
+        def make_gen_dispatch_fig(bus_id: int,
+                                  df_params: pd.DataFrame,
+                                  df_profile: pd.DataFrame,
+                                  gen_per_hour_bau: list[list[float]],
+                                  gen_per_hour_wa:  list[list[float]]) -> go.Figure | None:
+        
+            # -------- column name & validity ----------------------------------
+            col = f"p_mw_PV{bus_id}"
+            if col not in df_profile.columns:
+                st.error(f"❌  Column '{col}' not found in the Generator Profile sheet.")
+                return None
+        
+            hours = list(range(len(gen_per_hour_bau)))          # usually 24
+            planned   = df_profile[col].tolist()
+        
+            # the first row in df_gen_params is the slack/ext-grid generator,
+            # so we skip it → index in the *hour-by-hour* lists:
+            gens        = df_params["bus"].tolist()[1:]
+            try:
+                idx = gens.index(bus_id)
+            except ValueError:
+                st.error(f"Generator bus {bus_id} not found in parameter sheet.")
+                return None
+        
+            served_bau  = [hour[idx] for hour in gen_per_hour_bau]
+            served_wa   = [hour[idx] for hour in gen_per_hour_wa]
+        
+            # -------- build the grouped-bar chart -----------------------------
+            fig = go.Figure()
+            fig.add_bar(x=hours, y=planned,   name="Planned Dispatch",
+                        marker_color="rgba(99,110,250,0.8)")
+            fig.add_bar(x=hours, y=served_bau, name="Projected: Current OPF",
+                        marker_color="rgba(239,85,59,0.8)")
+            fig.add_bar(x=hours, y=served_wa,  name="Projected: Weather-Aware OPF",
+                        marker_color="rgba(0,204,150,0.8)")
+        
+            fig.update_layout(
+                title=f"Hourly Generator Dispatch – Bus {bus_id}",
+                xaxis=dict(title="Time [hours]", tickmode="linear", dtick=1),
+                yaxis_title="Generation [MWh]",
+                barmode="group",
+                template="plotly_dark",
+                legend_title="Scenario",
+                height=600,
+                width=1200,
+                margin=dict(l=50, r=50, t=70, b=40),
+            )
+            return fig
+    
+        
+        col1, col2 = st.columns(2)
 
-    # ── Line-Loading-over-Time comparison ------------------------------------
-    if st.button("Line Loading Over Time Comparison"):
-        fig_bau, fig_wa = make_line_loading_figs(
-            hours,
-            loading_percent_bau,
-            loading_percent_wa,
-            df_line,
-        )
-        # # use tabs so both plots fit nicely
-        # tab1, tab2 = st.tabs(["Current OPF", "Weather-Aware OPF"])
-        # with tab1:
-        st.plotly_chart(fig_bau, use_container_width=True)
-        # with tab2:
-        st.plotly_chart(fig_wa,  use_container_width=True)
+        with col1:
+            if st.button("Hourly Load-Shedding Comparison", key="btn_ls",
+                         disabled=not data_ready):
+                _add_fig("load_shed", make_load_shed_fig())
     
-    st.markdown("---")
-
-    # ── Load-Served comparison -------------------------------------------------
-    bus_options = df_load_params["bus"].astype(int).tolist()
-    chosen_bus  = st.selectbox("Select Load-Bus", bus_options, key="ls_bus")
+            if st.button("Difference in Generation Cost", key="btn_cost",
+                         disabled=not data_ready):
+                _add_fig("cost_diff",
+                         make_cost_diff_fig(st.session_state.hours,
+                                            st.session_state.cost_bau,
+                                            st.session_state.cost_wa))
     
-    if st.button("Show Load-Served Comparison"):
-        fig = make_load_served_fig(
-            bus_id            = chosen_bus,
-            df_load_profile   = df_load_profile,
-            served_bau        = served_bau,
-            served_wa         = served_wa,
-        )
-        st.plotly_chart(fig, use_container_width=True)
+            if st.button("Potential Revenue Loss (Δ PKR)", key="btn_loss",
+                         disabled=not data_ready):
+                _add_fig("lost_rev",
+                         make_lost_savings_fig(st.session_state.hours,
+                                               st.session_state.cost_bau,
+                                               st.session_state.cost_wa,
+                                               st.session_state.h_shed_bau,
+                                               st.session_state.h_shed_wa))
     
-    st.markdown("---")
-
-    if st.button("Slack Generator Dispatch Comparison"):
-        fig = make_slack_dispatch_fig(
-            planned    = planned_slack,
-            slack_bau  = slack_bau,
-            slack_wa   = slack_wa,
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        with col2:
+            if st.button("Line Loading – Current OPF / WA OPF", key="btn_line",
+                         disabled=not data_ready):
+                fig_bau, fig_wa = make_line_loading_figs(
+                    st.session_state.hours,
+                    st.session_state.loading_percent_bau,
+                    st.session_state.loading_percent_wa,
+                    st.session_state.df_line,
+                )
+                _add_fig("line_loading_bau", fig_bau)
+                _add_fig("line_loading_wa",  fig_wa)
     
-    st.markdown("---")
-
-    # ────────────────────────────────────────────────────────────
-    # Generator-dispatch comparison
-    # ────────────────────────────────────────────────────────────
+            # ----- slack dispatch ------------------------------------------------
+            if st.button("Slack Generator Dispatch Comparison", key="btn_slack",
+                         disabled=not data_ready):
+                _add_fig("slack_disp",
+                         make_slack_dispatch_fig(st.session_state.planned_slack,
+                                                 st.session_state.slack_bau,
+                                                 st.session_state.slack_wa))
     
-    gen_bus_options = df_gen_params["bus"].tolist()[1:]          # skip ext-grid
-    chosen_gen = st.selectbox(
-        "Select Generator (bus id)",
-        gen_bus_options,
-        format_func=lambda b: f"Generator {b}",
-        key="gen_bus_picker",
-    )
+        st.markdown("---")
     
-    if st.button("Show Hourly Generator Dispatch Comparison"):
-        fig = make_gen_dispatch_fig(
-            bus_id=chosen_gen,
-            df_params=df_gen_params,
-            df_profile=df_gen_profile,
-            gen_per_hour_bau = st.session_state.gen_per_hour_bau,
-            gen_per_hour_wa  = st.session_state.gen_per_hour_wa,
-        )
-        if fig:                              # only plot if the helper returned a fig
+        # ── load-served & generator-dispatch need a picker first ────────────────
+        if data_ready:
+    
+            # ---- Load-bus picker ----------------------------------------------
+            bus_options = st.session_state.df_load_params["bus"].astype(int).tolist()
+            chosen_bus  = st.selectbox("Select Load Bus",
+                                       bus_options, key="ls_bus",
+                                       disabled=not data_ready)
+    
+            if st.button("Show Load-Served Comparison", key="btn_load_served"):
+                _add_fig(f"load_served_{chosen_bus}",
+                         make_load_served_fig(chosen_bus,
+                                              st.session_state.df_load_profile,
+                                              st.session_state.served_bau,
+                                              st.session_state.served_wa))
+    
+            # ---- Generator picker ---------------------------------------------
+            gen_options = st.session_state.df_gen_params["bus"].tolist()[1:]   # skip slack
+            chosen_gen  = st.selectbox("Select Generator (bus id)",
+                                       gen_options, key="gen_bus",
+                                       disabled=not data_ready)
+    
+            if st.button("Show Generator Dispatch Comparison", key="btn_gen_disp"):
+                _add_fig(f"gen_disp_{chosen_gen}",
+                         make_gen_dispatch_fig(chosen_gen,
+                                               st.session_state.df_gen_params,
+                                               st.session_state.df_gen_profile,
+                                               st.session_state.gen_per_hour_bau,
+                                               st.session_state.gen_per_hour_wa))
+    
+        st.markdown("---")
+    
+        # ────────────────────────────────────────────────────────────────────────
+        #  Finally:  render every stored figure → they persist across reruns
+        # ────────────────────────────────────────────────────────────────────────
+        for fig in st.session_state.analytics_figs.values():
             st.plotly_chart(fig, use_container_width=True)
     
-    st.markdown("---")
-
+        # # ── Buttons – vertical stack ------------------------------------------
+        # if st.button("Hourly Load-Shedding Comparison"):
+        #     # clean up possible None values so Plotly can plot
+        #     hourly_shed_bau     = [v if v is not None else 0 for v in hourly_shed_bau]
+        #     hourly_shed_weather = [v if v is not None else 0 for v in hourly_shed_weather]
+        #     fig_ls = make_load_shed_fig(hours, hourly_shed_bau, hourly_shed_weather)
+        #     st.plotly_chart(fig_ls, use_container_width=True)
+    
+        # st.markdown("---")
+    
+        # if st.button("Difference in Generation Cost"):
+        #     fig_cost = make_cost_diff_fig(hours, cost_bau, cost_weather)
+        #     st.plotly_chart(fig_cost, use_container_width=True)
+    
+        # st.markdown("---")
+        # # ── Potential Revenue-Loss plot ------------------------------------------
+        # if st.button("Potential Revenue Loss From Current OPF"):
+        #     fig_loss = make_lost_savings_fig(
+        #         hours,
+        #         cost_bau,
+        #         cost_weather,
+        #         hourly_shed_bau,
+        #         hourly_shed_weather,
+        #     )
+        #     st.plotly_chart(fig_loss, use_container_width=True)
+        
+        # st.markdown("---")
+    
+        # # ── Line-Loading-over-Time comparison ------------------------------------
+        # if st.button("Line Loading Over Time Comparison"):
+        #     fig_bau, fig_wa = make_line_loading_figs(
+        #         hours,
+        #         loading_percent_bau,
+        #         loading_percent_wa,
+        #         df_line,
+        #     )
+        #     # # use tabs so both plots fit nicely
+        #     # tab1, tab2 = st.tabs(["Current OPF", "Weather-Aware OPF"])
+        #     # with tab1:
+        #     st.plotly_chart(fig_bau, use_container_width=True)
+        #     # with tab2:
+        #     st.plotly_chart(fig_wa,  use_container_width=True)
+        
+        # st.markdown("---")
+    
+        # # ── Load-Served comparison -------------------------------------------------
+        # bus_options = df_load_params["bus"].astype(int).tolist()
+        # chosen_bus  = st.selectbox("Select Load-Bus", bus_options, key="ls_bus")
+        
+        # if st.button("Show Load-Served Comparison"):
+        #     fig = make_load_served_fig(
+        #         bus_id            = chosen_bus,
+        #         df_load_profile   = df_load_profile,
+        #         served_bau        = served_bau,
+        #         served_wa         = served_wa,
+        #     )
+        #     st.plotly_chart(fig, use_container_width=True)
+        
+        # st.markdown("---")
+    
+        # if st.button("Slack Generator Dispatch Comparison"):
+        #     fig = make_slack_dispatch_fig(
+        #         planned    = planned_slack,
+        #         slack_bau  = slack_bau,
+        #         slack_wa   = slack_wa,
+        #     )
+        #     st.plotly_chart(fig, use_container_width=True)
+        
+        # st.markdown("---")
+    
+        # # ────────────────────────────────────────────────────────────
+        # # Generator-dispatch comparison
+        # # ────────────────────────────────────────────────────────────
+        
+        # gen_bus_options = df_gen_params["bus"].tolist()[1:]          # skip ext-grid
+        # chosen_gen = st.selectbox(
+        #     "Select Generator (bus id)",
+        #     gen_bus_options,
+        #     format_func=lambda b: f"Generator {b}",
+        #     key="gen_bus_picker",
+        # )
+        
+        # if st.button("Show Hourly Generator Dispatch Comparison"):
+        #     fig = make_gen_dispatch_fig(
+        #         bus_id=chosen_gen,
+        #         df_params=df_gen_params,
+        #         df_profile=df_gen_profile,
+        #         gen_per_hour_bau = st.session_state.gen_per_hour_bau,
+        #         gen_per_hour_wa  = st.session_state.gen_per_hour_wa,
+        #     )
+        #     if fig:                              # only plot if the helper returned a fig
+        #         st.plotly_chart(fig, use_container_width=True)
+        
+        # st.markdown("---")
+    
 
 
 
