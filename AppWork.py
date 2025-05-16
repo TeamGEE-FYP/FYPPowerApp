@@ -3108,8 +3108,19 @@ elif selection == "Data Analytics":
             xaxis=dict(tickmode="linear", dtick=1, range=[0, max(hours)]),
             width=1000,
             height=500,
-            legend=dict(x=0.01, y=0.99),
-            margin=dict(l=60, r=40, t=80, b=50),
+            # legend=dict(x=0.01, y=0.99),
+            # margin=dict(l=60, r=40, t=80, b=50),
+            # --- new legend placement & room on the right -----------------
+            legend=dict(
+                orientation="v",      # vertical list
+                yanchor="top", y=1,   # pin its top-left corner …
+                xanchor="left", x=1.02,   # … just outside the plot area
+                bgcolor="rgba(0,0,0,0)",  # transparent background
+                borderwidth=0,
+            ),
+            margin=dict(l=60, r=220, t=80, b=50),  # extra space for the legend
+            width=1000,                             # (optional) give the plot
+
         )
     
         # ---------- Weather-Aware figure (dashed) ----------------------------
@@ -3124,16 +3135,34 @@ elif selection == "Data Analytics":
                     name=line_legends[idx],
                 )
             )
+        # fig_wa.update_layout(
+        #     title="Projected Operation – Weather-Aware OPF<br>Line Loading Over Time",
+        #     template="plotly_dark",
+        #     xaxis_title="Time [hours]",
+        #     yaxis_title="Line Loading [%]",
+        #     xaxis=dict(tickmode="linear", dtick=1, range=[0, max(hours)]),
+        #     width=1000,
+        #     height=500,
+        #     # legend=dict(x=0.01, y=0.99),
+        #     # margin=dict(l=60, r=40, t=80, b=50),
+            
+        # )
         fig_wa.update_layout(
             title="Projected Operation – Weather-Aware OPF<br>Line Loading Over Time",
             template="plotly_dark",
             xaxis_title="Time [hours]",
             yaxis_title="Line Loading [%]",
             xaxis=dict(tickmode="linear", dtick=1, range=[0, max(hours)]),
-            width=1000,
+            legend=dict(
+                orientation="v",
+                yanchor="top", y=1,
+                xanchor="left", x=1.02,
+                bgcolor="rgba(0,0,0,0)",
+                borderwidth=0,
+            ),
+            margin=dict(l=60, r=220, t=80, b=50),
+            width=1=00,              # keep or remove as you prefer
             height=500,
-            legend=dict(x=0.01, y=0.99),
-            margin=dict(l=60, r=40, t=80, b=50),
         )
         return fig_bau, fig_wa
 
