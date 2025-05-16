@@ -2867,11 +2867,134 @@ elif selection == "Projected Operation - Under Weather Risk Aware OPF":
 
 
 
-
-        
+# ────────────────────────────────────────────────────────────────────────────
+# Page 5 :  Data Analytics
+# ────────────────────────────────────────────────────────────────────────────
 elif selection == "Data Analytics":
-   
-    st.title("Data Analytics")
+    st.title("Data Analytics Dashboard")
+
+    # ── Guard rails --------------------------------------------------------
+    if not (st.session_state.get("bau_ready") and st.session_state.get("wa_ready")):
+        st.info(
+            "Please run both **Projected Operation – Under Current OPF** "
+            "and **Projected Operation – Under Weather-Risk-Aware OPF** first."
+        )
+        st.stop()
+
+    # --- pull the cached series we need -----------------------------------
+    hours                = list(range(len(st.session_state.bau_hourly_cost_df)))
+    load_shed_bau        = st.session_state.bau_results["shedding_buses"]
+    hourly_shed_bau      = st.session_state.bau_results.get("hourly_shed_bau")  # list[float]
+    hourly_shed_weather  = st.session_state.wa_results.get("hourly_shed_weather_aware")
+    cost_bau             = st.session_state.bau_hourly_cost_df[
+        "Current OPF Generation Cost (PKR)"
+    ].tolist()
+    cost_weather         = st.session_state.wa_hourly_cost_df[
+        "Weather-Aware OPF Cost (PKR)"
+    ].tolist()
+
+    # **************************************************************
+    # *  Helper functions – identical maths, but return a Figure   *
+    # **************************************************************
+    def make_load_shed_fig(hours, shed_bau, shed_wa):
+        shed_bau_mwh = shed_bau                                   # already in MWh
+        shed_wa_mwh  = shed_wa
+
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=hours,
+                y=shed_bau_mwh,
+                mode="lines+markers",
+                name="Projected Operation: Current OPF Load Shedding",
+                line=dict(color="rgba(99,110,250,1)", width=3),
+                marker=dict(size=6),
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=hours,
+                y=shed_wa_mwh,
+                mode="lines+markers",
+                name="Projected Operation: Weather-Aware OPF Load Shedding",
+                line=dict(color="rgba(239,85,59,1)", width=3),
+                marker=dict(size=6),
+            )
+        )
+        fig.update_layout(
+            title="Hourly Load-Shedding Comparison",
+            xaxis_title="Time [hours]",
+            yaxis_title="Load Shedding [MWh]",
+            xaxis=dict(tickmode="linear", dtick=1, range=[0, max(hours)]),
+            template="plotly_dark",
+            legend=dict(x=0.01, y=0.99),
+            width=1000,
+            height=500,
+            margin=dict(l=60, r=40, t=60, b=50),
+        )
+        return fig
+
+    def make_cost_diff_fig(hours, cost_bau, cost_wa):
+        # scale to millions
+        cost_bau_m = [x / 1e6 for x in cost_bau]
+        cost_wa_m  = [x / 1e6 for x in cost_wa]
+
+        fig = go.Figure()
+
+        fig.add_trace(
+            go.Scatter(
+                x=hours + hours[::-1],
+                y=cost_bau_m + cost_wa_m[::-1],
+                fill="toself",
+                fillcolor="rgba(255,140,0,0.3)",
+                line=dict(color="rgba(255,255,255,0)"),
+                hoverinfo="skip",
+                showlegend=True,
+                name="Cost Difference",
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=hours,
+                y=cost_bau_m,
+                mode="lines+markers",
+                name="Projected Operation: Current OPF Cost",
+                line=dict(color="rgba(0,204,150,1)", width=3),
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=hours,
+                y=cost_wa_m,
+                mode="lines+markers",
+                name="Projected Operation: Weather-Aware Cost",
+                line=dict(color="rgba(171,99,250,1)", width=3),
+            )
+        )
+        fig.update_layout(
+            title="Difference in Generation Cost",
+            xaxis_title="Time [hours]",
+            yaxis_title="Cost [millions PKR]",
+            xaxis=dict(tickmode="linear", dtick=1, range=[0, max(hours)]),
+            template="plotly_dark",
+            legend=dict(x=0.01, y=0.99),
+            width=1200,
+            height=500,
+            margin=dict(l=60, r=40, t=60, b=50),
+        )
+        return fig
+
+    # ── Buttons – vertical stack ------------------------------------------
+    if st.button("Hourly Load-Shedding Comparison"):
+        fig_ls = make_load_shed_fig(hours, hourly_shed_bau, hourly_shed_weather)
+        st.plotly_chart(fig_ls, use_container_width=True)
+
+    st.markdown("---")
+
+    if st.button("Difference in Generation Cost"):
+        fig_cost = make_cost_diff_fig(hours, cost_bau, cost_weather)
+        st.plotly_chart(fig_cost, use_container_width=True)
+
 
    
     
