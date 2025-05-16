@@ -15,6 +15,7 @@ import geemap
 import numpy as np
 import math
 import traceback
+import plotly.graph_objects as go
 from shapely.geometry import LineString, Point
 
 # Set page configuration
